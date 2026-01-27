@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16
+    container_name: eventoria-db
+    environment:
+      POSTGRES_DB: eventoria
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - eventoria_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eventoria"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: Eventoria.Api/Dockerfile
+    container_name: eventoria-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=eventoria;Username=postgres;Password=postgres
+      Jwt__Key: "DEV_ONLY_change_this_to_long_random_string_32chars_min"
+      Jwt__Issuer: "Eventoria"
+      Jwt__Audience: "Eventoria"
+      Storage__LocalRoot: "/data/uploads"
+      Storage__PublicBaseUrl: "http://localhost:8080/uploads"
+    ports:
+      - "8080:8080"
+    volumes:
+      - eventoria_uploads:/data/uploads
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: eventoria-pgadmin
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@eventoria.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+
+volumes:
+  eventoria_db:
+  eventoria_uploads:

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Eventoria.Api/Eventoria.Api.csproj" />
+  <Project Path="Eventoria.Application/Eventoria.Application.csproj" />
+  <Project Path="Eventoria.Domain/Eventoria.Domain.csproj" />
+  <Project Path="Eventoria.Infrastructure/Eventoria.Infrastructure.csproj" />
+</Solution>
