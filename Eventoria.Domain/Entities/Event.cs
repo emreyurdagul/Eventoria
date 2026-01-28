@@ -3,7 +3,7 @@ using Eventoria.Domain.Enums;
 
 namespace Eventoria.Domain.Entities;
 
-public class Event : BaseEntity
+public class Event : AggregateRoot
 {
     private readonly List<EventMembership> _memberships = [];
     private readonly List<EventInvite> _invites = [];

@@ -1,5 +1,6 @@
 ﻿using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Domain.Entities;
+using Eventoria.Domain.Enums;
 using Eventoria.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,12 +15,18 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         _db = db;
     }
 
+    public Task<bool> CodeExistsAsync(string code, CancellationToken ct)
+        => _db.Events.AnyAsync(e => e.Code == code, ct);
+
     public async Task<Event?> GetByCodeAsync(string code, CancellationToken ct)
         => await _db.Events
             .Include(e => e.Invites)
             .Include(e => e.Memberships)
             .FirstOrDefaultAsync(e => e.Code == code, ct);
 
-    public Task<bool> CodeExistsAsync(string code, CancellationToken ct)
-        => _db.Events.AnyAsync(e => e.Code == code, ct);
+    public Task<bool> IsEventAdminAsync(Guid eventId, Guid userId, CancellationToken ct)
+        => _db.EventMemberships.AnyAsync(m =>
+            m.EventId == eventId &&
+            m.UserId == userId &&
+            m.Role == EventRole.Admin, ct);
 }

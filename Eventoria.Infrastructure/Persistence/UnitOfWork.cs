@@ -7,7 +7,6 @@ namespace Eventoria.Infrastructure.Persistence;
 public class UnitOfWork : IUnitOfWork
 {
     private readonly AppDbContext _db;
-
     public UnitOfWork(AppDbContext db) => _db = db;
 
     public Task<int> SaveChangesAsync(CancellationToken ct)
@@ -15,7 +14,6 @@ public class UnitOfWork : IUnitOfWork
 
     public async Task ExecuteInTransactionAsync(Func<CancellationToken, Task> action, CancellationToken ct)
     {
-        // EF ExecutionStrategy + transaction (Postgres için de güvenli)
         var strategy = _db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
