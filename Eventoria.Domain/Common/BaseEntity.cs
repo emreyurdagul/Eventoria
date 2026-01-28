@@ -4,8 +4,9 @@ public abstract class BaseEntity
 {
     public Guid Id { get; protected set; }
 
-    public DateTime CreatedAtUtc { get; private set; } = DateTime.UtcNow;
-    public DateTime? UpdatedAtUtc { get; private set; }
+    public DateTime CreatedAtUtc { get; protected set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAtUtc { get; protected set; }
+
 
     public string ConcurrencyStamp { get; private set; } = Guid.NewGuid().ToString("N");
 

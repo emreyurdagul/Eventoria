@@ -1,4 +1,6 @@
 ﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Auth;
+using Eventoria.Infrastructure.Auth;
 using Eventoria.Infrastructure.Data;
 using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
@@ -23,6 +25,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IAuthService, AuthService>();
 
         // Identity (full pipeline: UserManager, RoleManager, SignInManager)
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(opt =>

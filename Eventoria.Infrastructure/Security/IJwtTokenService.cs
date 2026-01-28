@@ -1,6 +1,6 @@
 ﻿using Eventoria.Infrastructure.Security;
 
-namespace Eventoria.Api.Security;
+namespace Eventoria.Application.Auth;
 
 public interface IJwtTokenService
 {

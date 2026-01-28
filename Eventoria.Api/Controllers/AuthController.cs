@@ -1,8 +1,6 @@
-using Eventoria.Api.Contracts.Auth;
-using Eventoria.Api.Security;
-using Eventoria.Infrastructure.Security;
+using Eventoria.Application.Auth;
+using Eventoria.Application.Auth.Contracts;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Identity;
 
 namespace Eventoria.Api.Controllers;
 
@@ -10,89 +8,44 @@ namespace Eventoria.Api.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly UserManager<ApplicationUser> _users;
-    private readonly SignInManager<ApplicationUser> _signIn;
-    private readonly IJwtTokenService _jwt;
+    private readonly IAuthService _auth;
 
-    public AuthController(
-        UserManager<ApplicationUser> users,
-        SignInManager<ApplicationUser> signIn,
-        IJwtTokenService jwt)
+    public AuthController(IAuthService auth)
     {
-        _users = users;
-        _signIn = signIn;
-        _jwt = jwt;
+        _auth = auth;
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest req)
-    {
-        var email = req.Email.Trim().ToLowerInvariant();
-
-        var exists = await _users.FindByEmailAsync(email);
-        if (exists != null)
-            return BadRequest(new { error = "Email already registered." });
-
-        var user = new ApplicationUser
-        {
-            Id = Guid.NewGuid(),
-            UserName = email,
-            Email = email
-        };
-
-        var result = await _users.CreateAsync(user, req.Password);
-        if (!result.Succeeded)
-            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
-
-        // Register sonrasý login token dönmek iyi DX
-        var token = await _jwt.CreateAsync(user);
-        return Ok(new AuthResponse(token));
-    }
+    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest req)
+        => Ok(await _auth.RegisterAsync(req));
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginRequest req)
+    public async Task<ActionResult<AuthResponse>> Login(LoginRequest req)
+        => Ok(await _auth.LoginAsync(req));
+
+    [HttpPost("refresh")]
+    public async Task<ActionResult<AuthResponse>> Refresh(RefreshRequest req)
+        => Ok(await _auth.RefreshAsync(req));
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(LogoutRequest req)
     {
-        var email = req.Email.Trim().ToLowerInvariant();
-        var user = await _users.FindByEmailAsync(email);
-        if (user == null)
-            return Unauthorized(new { error = "Invalid credentials." });
-
-        var result = await _signIn.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: true);
-        if (!result.Succeeded)
-            return Unauthorized(new { error = "Invalid credentials." });
-
-        var token = await _jwt.CreateAsync(user);
-        return Ok(new AuthResponse(token));
+        await _auth.LogoutAsync(req);
+        return Ok(new { message = "Logged out." });
     }
 
-    // Þimdilik email göndermek yok -> token üretip döndürüyoruz (dev)
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest req)
     {
-        var email = req.Email.Trim().ToLowerInvariant();
-        var user = await _users.FindByEmailAsync(email);
-
-        // Security: email var/yok ayýrt etme
-        if (user == null) return Ok(new { message = "If the account exists, a reset link will be sent." });
-
-        var token = await _users.GeneratePasswordResetTokenAsync(user);
-
-        // DEV MODE: token dön
-        return Ok(new { message = "Password reset token generated.", token });
+        var token = await _auth.GeneratePasswordResetTokenAsync(req);
+        // DEV MODE: token dön (prod’da mail)
+        return Ok(new { message = "If the account exists, a reset link will be sent.", token });
     }
 
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest req)
     {
-        var email = req.Email.Trim().ToLowerInvariant();
-        var user = await _users.FindByEmailAsync(email);
-        if (user == null)
-            return BadRequest(new { error = "Invalid request." });
-
-        var result = await _users.ResetPasswordAsync(user, req.Token, req.NewPassword);
-        if (!result.Succeeded)
-            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
-
+        await _auth.ResetPasswordAsync(req);
         return Ok(new { message = "Password reset successful." });
     }
 }

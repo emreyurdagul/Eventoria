@@ -1,3 +1,3 @@
-﻿namespace Eventoria.Api.Contracts.Auth;
+﻿namespace Eventoria.Application.Auth.Contracts;
 
 public record LoginRequest(string Email, string Password);

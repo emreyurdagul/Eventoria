@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<Event> Events => Set<Event>();
     public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
     public DbSet<EventInvite> EventInvites => Set<EventInvite>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -36,23 +37,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     {
         var now = DateTime.UtcNow;
 
-        // Audit + concurrency
         foreach (var entry in ChangeTracker.Entries<BaseEntity>())
         {
             if (entry.State == EntityState.Added)
             {
-                // BaseEntity Id domain tarafından set ediliyor; null ise burada setleyebilirsin
                 if (entry.Entity.Id == Guid.Empty)
-                    entry.Entity.GetType().GetProperty("Id")?.SetValue(entry.Entity, Guid.NewGuid());
+                    entry.Entity.GetType().GetProperty(nameof(BaseEntity.Id))?
+                        .SetValue(entry.Entity, Guid.NewGuid()); // Id protected set → bu satır da patlayabilir
+                                                                 // Bu yüzden Id'yi de EF Property ile set edelim:
+                if (entry.Property(nameof(BaseEntity.Id)).CurrentValue is Guid id && id == Guid.Empty)
+                    entry.Property(nameof(BaseEntity.Id)).CurrentValue = Guid.NewGuid();
 
-                entry.Entity.GetType().GetProperty("CreatedAtUtc")?.SetValue(entry.Entity, now);
-                entry.Entity.GetType().GetProperty("UpdatedAtUtc")?.SetValue(entry.Entity, null);
-                entry.Entity.GetType().GetProperty("ConcurrencyStamp")?.SetValue(entry.Entity, Guid.NewGuid().ToString("N"));
+                entry.Property(nameof(BaseEntity.CreatedAtUtc)).CurrentValue = now;
+                entry.Property(nameof(BaseEntity.UpdatedAtUtc)).CurrentValue = null;
+                entry.Property(nameof(BaseEntity.ConcurrencyStamp)).CurrentValue = Guid.NewGuid().ToString("N");
             }
             else if (entry.State == EntityState.Modified)
             {
-                entry.Entity.GetType().GetProperty("UpdatedAtUtc")?.SetValue(entry.Entity, now);
-                entry.Entity.GetType().GetProperty("ConcurrencyStamp")?.SetValue(entry.Entity, Guid.NewGuid().ToString("N"));
+                entry.Property(nameof(BaseEntity.UpdatedAtUtc)).CurrentValue = now;
+                entry.Property(nameof(BaseEntity.ConcurrencyStamp)).CurrentValue = Guid.NewGuid().ToString("N");
             }
         }
 
@@ -63,13 +66,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
         var result = await base.SaveChangesAsync(cancellationToken);
 
-        // Clear after save
         foreach (var e in ChangeTracker.Entries<BaseEntity>())
             e.Entity.ClearDomainEvents();
 
-        // Dispatch events (sync placeholder)
-        // Burayı ileride MediatR / message bus / outbox ile profesyonelce büyüteceğiz.
-        // Şimdilik DI ile bir dispatcher çağıracağız.
         if (domainEvents.Count > 0)
         {
             var dispatcher = this.GetService<IDomainEventDispatcher>();
