@@ -1,3 +1,9 @@
-﻿namespace Eventoria.Application.Billing.AssignQuota;
+﻿using MediatR;
 
-public sealed record AssignQuotaCommand(Guid AdminUserId, int MaxEvents, int MaxTotalParticipants);
+namespace Eventoria.Application.Billing.AssignQuota;
+
+public sealed record AssignQuotaCommand(
+    Guid AdminUserId,
+    int MaxEvents,
+    int MaxTotalParticipants
+) : IRequest<AssignQuotaResult>;

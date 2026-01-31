@@ -11,22 +11,21 @@ public sealed class EventAdminQuotaRepository
     private readonly AppDbContext _db;
 
     public EventAdminQuotaRepository(AppDbContext db) : base(db)
-        => _db = db;
+    {
+        _db = db;
+    }
 
-    public Task<EventAdminQuota?> GetActiveByAdminIdAsync(Guid adminUserId, CancellationToken ct)
-        => _db.EventAdminQuotas
+    public Task<EventAdminQuota?> GetActiveForAdminAsync(Guid adminUserId, CancellationToken ct)
+        => _db.Set<EventAdminQuota>()
             .FirstOrDefaultAsync(x => x.AdminUserId == adminUserId && x.IsActive, ct);
 
     public async Task DeactivateAllForAdminAsync(Guid adminUserId, CancellationToken ct)
     {
-        var actives = await _db.EventAdminQuotas
+        var actives = await _db.Set<EventAdminQuota>()
             .Where(x => x.AdminUserId == adminUserId && x.IsActive)
             .ToListAsync(ct);
 
         foreach (var q in actives)
             q.Deactivate();
     }
-
-    public Task<int> SaveChangesAsync(CancellationToken ct)
-        => _db.SaveChangesAsync(ct);
 }

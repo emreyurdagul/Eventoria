@@ -1,4 +1,5 @@
-﻿using Eventoria.Domain.Entities;
+﻿using Eventoria.Application.Events.Queries.Models;
+using Eventoria.Domain.Entities;
 
 namespace Eventoria.Application.Abstractions.Persistence;
 
@@ -14,5 +15,9 @@ public interface IEventRepository : IRepository<Event>
     // ✅ Quota için gerekli
     Task<int> CountCreatedByAsync(Guid adminUserId, CancellationToken ct);
     Task<int> SumParticipantLimitsCreatedByAsync(Guid adminUserId, CancellationToken ct);
+    Task<int> SumParticipantLimitsCreatedByExcludingEventAsync(Guid creatorUserId, Guid excludeEventId, CancellationToken ct);
+    Task<bool> IsMemberAsync(Guid eventId, Guid userId, CancellationToken ct);
+    Task<IReadOnlyList<MyEventItem>> GetMyEventsAsync(Guid userId, CancellationToken ct);
+    Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct);
 
 }

@@ -1,9 +1,13 @@
 ﻿using Eventoria.Application.Abstractions.Persistence;
-using Eventoria.Application.Auth;
-using Eventoria.Infrastructure.Auth;
+using Eventoria.Application.Abstractions.Storage;
+using Eventoria.Application.Auth.Abstractions;
+using Eventoria.Infrastructure.Auth.Identity;
+using Eventoria.Infrastructure.Auth.Jwt;
+using Eventoria.Infrastructure.Auth.RefreshTokens;
 using Eventoria.Infrastructure.Data;
 using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
+using Eventoria.Infrastructure.Storage;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,18 +21,23 @@ public static class DependencyInjection
     {
         // DbContext
         services.AddDbContext<AppDbContext>(opt =>
-        {
-            opt.UseNpgsql(config.GetConnectionString("Postgres"));
-        });
+            opt.UseNpgsql(config.GetConnectionString("Postgres")));
 
         // Persistence
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
-        services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IAuthService, AuthService>();
 
-        // Identity (full pipeline: UserManager, RoleManager, SignInManager)
+        // Auth - Clean Architecture (Application abstractions -> Infrastructure implementations)
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IJwtTokenService, JwtAccessTokenService>();
+        services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
+        services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
+
+        services.AddSingleton<IStorageProviderResolver, StorageProviderResolver>();
+
+        services.AddScoped<IMediaFileRepository, MediaFileRepository>();
+        // Identity (UserManager, RoleManager, SignInManager, token providers)
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(opt =>
         {
             opt.User.RequireUniqueEmail = true;
@@ -43,8 +52,8 @@ public static class DependencyInjection
             opt.Lockout.MaxFailedAccessAttempts = 5;
             opt.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
         })
-            .AddEntityFrameworkStores<AppDbContext>()
-            .AddDefaultTokenProviders();
+        .AddEntityFrameworkStores<AppDbContext>()
+        .AddDefaultTokenProviders();
 
         return services;
     }

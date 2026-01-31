@@ -1,51 +1,58 @@
-using Eventoria.Application.Auth;
 using Eventoria.Application.Auth.Contracts;
+using Eventoria.Application.Auth.ForgotPassword;
+using Eventoria.Application.Auth.Login;
+using Eventoria.Application.Auth.Logout;
+using Eventoria.Application.Auth.Refresh;
+using Eventoria.Application.Auth.Register;
+using Eventoria.Application.Auth.ResetPassword;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Eventoria.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public sealed class AuthController : ControllerBase
 {
-    private readonly IAuthService _auth;
+    private readonly IMediator _mediator;
 
-    public AuthController(IAuthService auth)
+    public AuthController(IMediator mediator)
     {
-        _auth = auth;
+        _mediator = mediator;
     }
 
     [HttpPost("register")]
-    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest req)
-        => Ok(await _auth.RegisterAsync(req));
+    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest req, CancellationToken ct)
+        => Ok(await _mediator.Send(new RegisterCommand(req), ct));
 
     [HttpPost("login")]
-    public async Task<ActionResult<AuthResponse>> Login(LoginRequest req)
-        => Ok(await _auth.LoginAsync(req));
+    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest req, CancellationToken ct)
+        => Ok(await _mediator.Send(new LoginCommand(req), ct));
 
     [HttpPost("refresh")]
-    public async Task<ActionResult<AuthResponse>> Refresh(RefreshRequest req)
-        => Ok(await _auth.RefreshAsync(req));
+    public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshRequest req, CancellationToken ct)
+        => Ok(await _mediator.Send(new RefreshCommand(req), ct));
 
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout(LogoutRequest req)
+    public async Task<IActionResult> Logout([FromBody] LogoutRequest req, CancellationToken ct)
     {
-        await _auth.LogoutAsync(req);
+        await _mediator.Send(new LogoutCommand(req), ct);
         return Ok(new { message = "Logged out." });
     }
 
     [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest req)
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req, CancellationToken ct)
     {
-        var token = await _auth.GeneratePasswordResetTokenAsync(req);
+        var token = await _mediator.Send(new ForgotPasswordCommand(req), ct);
+
         // DEV MODE: token dön (prod’da mail)
         return Ok(new { message = "If the account exists, a reset link will be sent.", token });
     }
 
     [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword(ResetPasswordRequest req)
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req, CancellationToken ct)
     {
-        await _auth.ResetPasswordAsync(req);
+        await _mediator.Send(new ResetPasswordCommand(req), ct);
         return Ok(new { message = "Password reset successful." });
     }
 }

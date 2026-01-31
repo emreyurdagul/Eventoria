@@ -22,6 +22,43 @@ namespace Eventoria.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Eventoria.Domain.Billing.EventAdminQuota", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AdminUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxEvents")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxTotalParticipants")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminUserId");
+
+                    b.HasIndex("AdminUserId", "IsActive");
+
+                    b.ToTable("event_admin_quotas", (string)null);
+                });
+
             modelBuilder.Entity("Eventoria.Domain.Entities.Event", b =>
                 {
                     b.Property<Guid>("Id")
@@ -147,6 +184,82 @@ namespace Eventoria.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("event_memberships", (string)null);
+                });
+
+            modelBuilder.Entity("Eventoria.Domain.Entities.MediaFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BucketOrContainer")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ETag")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProviderKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "CreatedAtUtc");
+
+                    b.HasIndex("OwnerUserId", "CreatedAtUtc");
+
+                    b.HasIndex("ProviderKey", "BucketOrContainer", "ObjectKey")
+                        .IsUnique();
+
+                    b.ToTable("media_files", (string)null);
                 });
 
             modelBuilder.Entity("Eventoria.Domain.Entities.RefreshToken", b =>
@@ -385,6 +498,37 @@ namespace Eventoria.Infrastructure.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Eventoria.Domain.Entities.Event", b =>
+                {
+                    b.OwnsOne("Eventoria.Domain.Entities.EventSpecs", "Specs", b1 =>
+                        {
+                            b1.Property<Guid>("EventId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("ParticipantLimit")
+                                .HasColumnType("integer")
+                                .HasColumnName("participant_limit");
+
+                            b1.Property<int>("PhotosPerUserLimit")
+                                .HasColumnType("integer")
+                                .HasColumnName("photos_per_user_limit");
+
+                            b1.Property<int>("VideosPerUserLimit")
+                                .HasColumnType("integer")
+                                .HasColumnName("videos_per_user_limit");
+
+                            b1.HasKey("EventId");
+
+                            b1.ToTable("events");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EventId");
+                        });
+
+                    b.Navigation("Specs")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Eventoria.Domain.Entities.EventInvite", b =>

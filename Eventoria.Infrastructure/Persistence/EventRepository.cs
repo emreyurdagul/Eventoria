@@ -1,4 +1,5 @@
 ﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Domain.Entities;
 using Eventoria.Domain.Enums;
 using Eventoria.Infrastructure.Data;
@@ -49,6 +50,82 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         return await _db.Events
             .Where(e => e.CreatedByUserId == adminUserId)
             .SumAsync(e => e.Specs.ParticipantLimit, ct);
+    }
+
+    public async Task<int> SumParticipantLimitsCreatedByExcludingEventAsync(Guid creatorUserId, Guid excludeEventId, CancellationToken ct)
+    {
+        var sum = await _db.Events
+            .Where(e => e.CreatedByUserId == creatorUserId && e.Id != excludeEventId)
+            .SumAsync(e => (int?)e.Specs.ParticipantLimit, ct);
+
+        return sum ?? 0;
+    }
+
+    public Task<bool> IsMemberAsync(Guid eventId, Guid userId, CancellationToken ct)
+    => _db.EventMemberships.AnyAsync(m => m.EventId == eventId && m.UserId == userId, ct);
+
+    public async Task<IReadOnlyList<MyEventItem>> GetMyEventsAsync(Guid userId, CancellationToken ct)
+    {
+        var list = await _db.EventMemberships
+            .Where(m => m.UserId == userId)
+            .Join(
+                _db.Events,
+                m => m.EventId,
+                e => e.Id,
+                (m, e) => new { m, e }
+            )
+            .Select(x => new MyEventItem(
+                x.e.Id,
+                x.e.Code,
+                x.e.Title,
+                x.e.Date,
+                x.e.Status,
+                x.m.Role,
+                x.e.Specs.ParticipantLimit,
+                _db.EventMemberships.Count(mm => mm.EventId == x.e.Id)
+            ))
+            .OrderByDescending(x => x.Date)
+            .ToListAsync(ct);
+
+        return list;
+    }
+
+    public async Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct)
+    {
+        // Önce kullanıcı bu eventte member mı? + rolü nedir? (tek query)
+        var row = await _db.EventMemberships
+            .Where(m => m.EventId == eventId && m.UserId == userId)
+            .Select(m => new { m.Role })
+            .FirstOrDefaultAsync(ct);
+
+        if (row == null)
+            return null;
+
+        var role = row.Role;
+
+        // Event detayları (projection)
+        var dto = await _db.Events
+            .Where(e => e.Id == eventId)
+            .Select(e => new EventDetailsDto(
+                e.Id,
+                e.Code,
+                e.Title,
+                e.Description,
+                e.Date,
+                e.Status,
+                e.CreatedByUserId,
+                role,
+                e.Specs.ParticipantLimit,
+                e.Specs.PhotosPerUserLimit,
+                e.Specs.VideosPerUserLimit,
+                _db.EventMemberships.Count(m => m.EventId == e.Id),
+                role == Domain.Enums.EventRole.Admin
+                    ? _db.Set<Domain.Entities.EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
+                    : false
+            ))
+            .FirstOrDefaultAsync(ct);
+
+        return dto;
     }
 
 }

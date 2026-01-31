@@ -68,7 +68,7 @@ public sealed class EventsController : ControllerBase
 
     [HttpPost("join")]
     [Authorize]
-    public async Task<ActionResult<JoinEventResult>> Join([FromBody] JoinEventRequestBody body, CancellationToken ct)
+    public async Task<ActionResult<JoinEventResult>> Join([FromBody] JoinEventBody body, CancellationToken ct)
     {
         var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (!Guid.TryParse(userIdStr, out var userId))
@@ -76,6 +76,7 @@ public sealed class EventsController : ControllerBase
 
         var cmd = new JoinEventCommand(userId, body.Code, body.InviteKey);
         var res = await _mediator.Send(cmd, ct);
+
         return Ok(res);
     }
 }

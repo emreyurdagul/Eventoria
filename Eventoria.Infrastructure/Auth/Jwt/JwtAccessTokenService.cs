@@ -1,4 +1,5 @@
-﻿using Eventoria.Application.Auth;
+﻿using Eventoria.Application.Auth.Abstractions;
+using Eventoria.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -6,21 +7,25 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace Eventoria.Infrastructure.Security;
+namespace Eventoria.Infrastructure.Auth.Jwt;
 
-public sealed class JwtTokenService : IJwtTokenService
+public sealed class JwtAccessTokenService : IJwtTokenService
 {
     private readonly IConfiguration _config;
-    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly UserManager<ApplicationUser> _users;
 
-    public JwtTokenService(IConfiguration config, UserManager<ApplicationUser> userManager)
+    public JwtAccessTokenService(IConfiguration config, UserManager<ApplicationUser> users)
     {
         _config = config;
-        _userManager = userManager;
+        _users = users;
     }
 
-    public async Task<string> CreateAsync(ApplicationUser user)
+    public async Task<string> CreateAccessTokenAsync(Guid userId, CancellationToken ct)
     {
+        var user = await _users.FindByIdAsync(userId.ToString());
+        if (user == null)
+            throw new UnauthorizedAccessException("User not found.");
+
         var key = _config["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
         var issuer = _config["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
         var audience = _config["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
@@ -32,8 +37,7 @@ public sealed class JwtTokenService : IJwtTokenService
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
         };
 
-        // Roles
-        var roles = await _userManager.GetRolesAsync(user);
+        var roles = await _users.GetRolesAsync(user);
         foreach (var role in roles)
             claims.Add(new Claim(ClaimTypes.Role, role));
 

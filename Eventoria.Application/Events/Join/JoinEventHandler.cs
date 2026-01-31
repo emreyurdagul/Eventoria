@@ -8,33 +8,54 @@ namespace Eventoria.Application.Events.Join;
 public sealed class JoinEventHandler : IRequestHandler<JoinEventCommand, JoinEventResult>
 {
     private readonly IEventRepository _events;
+    private readonly IUnitOfWork _uow;
     private readonly IEventTokenService _tokens;
 
-    public JoinEventHandler(IEventRepository events, IEventTokenService tokens)
+    public JoinEventHandler(IEventRepository events, IUnitOfWork uow, IEventTokenService tokens)
     {
         _events = events;
+        _uow = uow;
         _tokens = tokens;
     }
 
     public async Task<JoinEventResult> Handle(JoinEventCommand cmd, CancellationToken ct)
     {
-        if (cmd.UserId == Guid.Empty) throw new InvalidOperationException("UserId is required.");
+        if (cmd.UserId == Guid.Empty)
+            throw new InvalidOperationException("UserId is required.");
+
         if (string.IsNullOrWhiteSpace(cmd.Code) || string.IsNullOrWhiteSpace(cmd.InviteKey))
             throw new InvalidOperationException("Code and InviteKey are required.");
 
-        var ev = await _events.GetByCodeAsync(cmd.Code.Trim(), ct)
-            ?? throw new InvalidOperationException("Event not found.");
+        return await _uow.ExecuteInTransactionAsync(async innerCt =>
+        {
+            var ev = await _events.GetByCodeAsync(cmd.Code.Trim(), innerCt)
+                ?? throw new InvalidOperationException("Event not found.");
 
-        var inviteHash = _tokens.Sha256Hex(cmd.InviteKey.Trim());
+            // Zaten üye mi?
+            var alreadyMember = await _events.IsMemberAsync(ev.Id, cmd.UserId, innerCt);
+            if (alreadyMember)
+                return new JoinEventResult(ev.Id); // idempotent
 
-        var active = ev.Invites.FirstOrDefault(x => x.IsActive);
-        if (active == null) throw new InvalidOperationException("Invite is not active.");
+            // Kapasite
+            if (ev.Memberships.Count >= ev.Specs.ParticipantLimit)
+                throw new InvalidOperationException("Event is full.");
 
-        if (!_tokens.FixedTimeEquals(active.InviteKeyHash, inviteHash))
-            throw new UnauthorizedAccessException("Invalid invite key.");
+            // Aktif invite
+            var activeInvite = ev.Invites.FirstOrDefault(x => x.IsActive);
+            if (activeInvite == null)
+                throw new InvalidOperationException("Invite is not active.");
 
-        ev.AddMembership(cmd.UserId, EventRole.Participant);
+            // Invite doğrulama
+            var inviteHash = _tokens.Sha256Hex(cmd.InviteKey.Trim());
+            if (!_tokens.FixedTimeEquals(activeInvite.InviteKeyHash, inviteHash))
+                throw new UnauthorizedAccessException("Invalid invite key.");
 
-        return new JoinEventResult(ev.Id);
+            // Membership ekle
+            ev.AddMembership(cmd.UserId, EventRole.Participant);
+
+            await _uow.SaveChangesAsync(innerCt);
+
+            return new JoinEventResult(ev.Id);
+        }, ct);
     }
 }
