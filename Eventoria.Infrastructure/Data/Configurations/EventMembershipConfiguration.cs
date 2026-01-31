@@ -26,5 +26,8 @@ public class EventMembershipConfiguration : IEntityTypeConfiguration<EventMember
             .HasMaxLength(64)
             .IsConcurrencyToken()
             .IsRequired();
+
+        b.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
+
     }
 }

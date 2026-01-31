@@ -10,7 +10,7 @@ public class Event : AggregateRoot
 
     private Event() { } // EF Core için
 
-    public Event(string title, string? description, DateOnly? date, Guid creatorUserId, string code)
+    public Event(string title, string? description, DateOnly? date, Guid creatorUserId, string code, EventSpecs specs)
     {
         Id = Guid.NewGuid();
         Title = title;
@@ -18,6 +18,8 @@ public class Event : AggregateRoot
         Date = date;
         Code = code;
         CreatedByUserId = creatorUserId;
+
+        Specs = specs ?? throw new ArgumentNullException(nameof(specs));
 
         AddDomainEvent(new EventCreatedDomainEvent(Id, creatorUserId));
     }
@@ -29,6 +31,8 @@ public class Event : AggregateRoot
     public EventStatus Status { get; private set; } = EventStatus.Active;
 
     public Guid CreatedByUserId { get; private set; }
+
+    public EventSpecs Specs { get; private set; } = default!;
 
     public IReadOnlyCollection<EventMembership> Memberships => _memberships;
     public IReadOnlyCollection<EventInvite> Invites => _invites;
@@ -48,4 +52,23 @@ public class Event : AggregateRoot
 
         _invites.Add(new EventInvite(Id, inviteHash));
     }
+
+    public void UpdateSpecs(EventSpecs specs)
+    {
+        Specs = specs ?? throw new ArgumentNullException(nameof(specs));
+        SetUpdated();
+    }
+
+    public void UpdateDetails(string title, string? description, DateOnly? date)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new InvalidOperationException("Title is required.");
+
+        Title = title.Trim();
+        Description = description?.Trim();
+        Date = date;
+
+        SetUpdated();
+    }
+
 }

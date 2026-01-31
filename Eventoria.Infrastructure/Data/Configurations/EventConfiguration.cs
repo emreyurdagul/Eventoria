@@ -27,6 +27,24 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.Property(x => x.CreatedByUserId).IsRequired();
 
+
+
+        // ✅ Owned: EventSpecs -> events tablosuna kolon
+        builder.OwnsOne(x => x.Specs, specs =>
+        {
+            specs.Property(p => p.ParticipantLimit)
+                .HasColumnName("participant_limit")
+                .IsRequired();
+
+            specs.Property(p => p.PhotosPerUserLimit)
+                .HasColumnName("photos_per_user_limit")
+                .IsRequired();
+
+            specs.Property(p => p.VideosPerUserLimit)
+                .HasColumnName("videos_per_user_limit")
+                .IsRequired();
+        });
+
         // BaseEntity fields
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.UpdatedAtUtc);

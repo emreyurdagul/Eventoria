@@ -1,4 +1,5 @@
-﻿using Eventoria.Domain.Common;
+﻿using Eventoria.Domain.Billing;
+using Eventoria.Domain.Common;
 using Eventoria.Domain.Entities;
 using Eventoria.Domain.Enums;
 using Eventoria.Infrastructure.Security;
@@ -15,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<EventMembership> EventMemberships => Set<EventMembership>();
     public DbSet<EventInvite> EventInvites => Set<EventInvite>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<EventAdminQuota> EventAdminQuotas => Set<EventAdminQuota>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
