@@ -1,7 +1,9 @@
 using Eventoria.Api;
 using Eventoria.Application;
 using Eventoria.Infrastructure;
+using Eventoria.Infrastructure.Data;
 using Eventoria.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
@@ -13,6 +15,16 @@ builder.Services
     .AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+    if (pendingMigrations.Any())
+    {
+        await db.Database.MigrateAsync();
+    }
+}
 
 
 await SuperUserSeeder.SeedAsync(app.Services);
