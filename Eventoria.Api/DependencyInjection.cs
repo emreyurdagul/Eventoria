@@ -1,5 +1,8 @@
-﻿using Eventoria.Application.Auth;
+﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Security;
+using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,43 +19,18 @@ public static class DependencyInjection
         services.AddControllers();
         services.AddEndpointsApiExplorer();
 
-        // 🔥 Swagger'ı en sade ve stabil haliyle ekliyoruz
-        services.AddSwaggerGen(c =>
+
+
+        services.AddSwaggerGen(o =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
+            o.SwaggerDoc("v1", new OpenApiInfo
             {
                 Title = "Eventoria API",
                 Version = "v1",
-                Description = "Eventoria – Event & Media Platform API",
-                Contact = new OpenApiContact
-                {
-                    Name = "Eventoria Team",
-                    Email = "dev@eventoria.app"
-                }
+                Description = "Eventoria – Event & Media Platform API"
             });
 
-            // XML comments (docstring)
-            var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
-            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-
-            // XML dosyası yoksa ya da bozuksa uygulamayı patlatma
-            if (File.Exists(xmlPath))
-            {
-                try
-                {
-                    // Boş dosya mı kontrol (0 byte)
-                    var fi = new FileInfo(xmlPath);
-                    if (fi.Length > 0)
-                        c.IncludeXmlComments(xmlPath);
-                }
-                catch
-                {
-                    // Swagger’ı düşürme. Loglamak istersen buraya logger ekleriz.
-                }
-            }
-
-            // JWT Auth
-            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
@@ -62,31 +40,50 @@ public static class DependencyInjection
                 Description = "JWT Token giriniz: Bearer {token}"
             });
 
+            // v10: requirement document üzerinden reference ile veriliyor
+            o.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
+            });
+        });
+        // JWT
+        var key = config["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
+        var issuer = config["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
+        var audience = config["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
+
+        services
+          .AddAuthentication(options =>
+          {
+              options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+              options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+          })
+          .AddJwtBearer(opt =>
+          {
+              opt.TokenValidationParameters = new TokenValidationParameters
+              {
+                  ValidateIssuer = true,
+                  ValidateAudience = true,
+                  ValidateLifetime = true,
+                  ValidateIssuerSigningKey = true,
+                  ValidIssuer = issuer,
+                  ValidAudience = audience,
+                  IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                  ClockSkew = TimeSpan.FromMinutes(2)
+              };
+          });
+
+        // MediatR
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(
+                typeof(Eventoria.Application.Events.Create.CreateEventHandler).Assembly);
         });
 
-
-        // JWT
-        var key = config["Jwt:Key"]!;
-        var issuer = config["Jwt:Issuer"]!;
-        var audience = config["Jwt:Audience"]!;
-
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(opt =>
-            {
-                opt.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = issuer,
-                    ValidAudience = audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
-                };
-            });
+        // Temporary registrations (idealde Infrastructure'da olur)
+        services.AddScoped<IEventAdminQuotaRepository, EventAdminQuotaRepository>();
+        services.AddSingleton<IEventTokenService, EventTokenService>();
 
         services.AddAuthorization();
-
 
         return services;
     }

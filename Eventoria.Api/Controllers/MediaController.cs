@@ -1,16 +1,18 @@
-﻿using System.Security.Claims;
+﻿using Eventoria.Api.Contracts.Media;
 using Eventoria.Application.Media.Download;
 using Eventoria.Application.Media.Upload;
 using Eventoria.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Eventoria.Api.Controllers;
 
 [ApiController]
 [Route("api/media")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public sealed class MediaController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -19,31 +21,29 @@ public sealed class MediaController : ControllerBase
     {
         _mediator = mediator;
     }
-
     [HttpPost("upload")]
-    [RequestSizeLimit(210_000_000)] // 200MB + küçük pay
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(210_000_000)]
     public async Task<ActionResult<UploadMediaResult>> Upload(
-        [FromForm] Guid? eventId,
-        [FromForm] MediaVisibility visibility,
-        [FromForm] IFormFile file,
-        CancellationToken ct)
+            [FromForm] UploadMediaForm form,
+            CancellationToken ct)
     {
         var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (!Guid.TryParse(userIdStr, out var userId))
             return Unauthorized();
 
-        if (file == null || file.Length <= 0)
+        if (form.File == null || form.File.Length <= 0)
             return BadRequest("File is required.");
 
-        await using var stream = file.OpenReadStream();
+        await using var stream = form.File.OpenReadStream();
 
         var cmd = new UploadMediaCommand(
             UserId: userId,
-            EventId: eventId,
-            Visibility: visibility,
-            FileName: file.FileName,
-            ContentType: file.ContentType,
-            SizeBytes: file.Length,
+            EventId: form.EventId,
+            Visibility: form.Visibility,
+            FileName: form.File.FileName,
+            ContentType: form.File.ContentType,
+            SizeBytes: form.File.Length,
             Content: stream
         );
 

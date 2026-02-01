@@ -1,6 +1,5 @@
 ﻿using Amazon.S3;
 using Amazon.S3.Model;
-using Amazon.S3.Util;
 using Eventoria.Application.Abstractions.Storage;
 
 namespace Eventoria.Infrastructure.Storage.S3;
@@ -16,17 +15,36 @@ public sealed class S3CompatibleObjectStorage : IObjectStorage
 
     public async Task<StoragePutResult> PutAsync(StoragePutRequest request, CancellationToken ct)
     {
-        var put = new PutObjectRequest
-        {
-            BucketName = request.Bucket,
-            Key = request.ObjectKey,
-            InputStream = request.Content,
-            ContentType = request.ContentType,
-            AutoCloseStream = false
-        };
+        var tempPath = Path.Combine(Path.GetTempPath(), $"eventoria-upload-{Guid.NewGuid():N}");
 
-        var res = await _s3.PutObjectAsync(put, ct);
-        return new StoragePutResult(res.ETag);
+        try
+        {
+            await using (var tmp = File.Create(tempPath))
+            {
+                await request.Content.CopyToAsync(tmp, ct);
+            }
+
+            var put = new PutObjectRequest
+            {
+                BucketName = request.Bucket,
+                Key = request.ObjectKey,
+                FilePath = tempPath,                 // ✅ InputStream yerine
+                ContentType = request.ContentType,
+
+                // ✅ S3-compatible “STREAMING-...-TRAILER” hatasını kesen ayarlar
+                UseChunkEncoding = false,
+                DisablePayloadSigning = true
+            };
+
+            var res = await _s3.PutObjectAsync(put, ct);
+
+            var etag = res.ETag?.Trim('"');
+            return new StoragePutResult(ETag: etag, VersionId: res.VersionId);
+        }
+        finally
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+        }
     }
 
     public Task DeleteAsync(string bucket, string objectKey, CancellationToken ct)
@@ -34,7 +52,6 @@ public sealed class S3CompatibleObjectStorage : IObjectStorage
 
     public Task<string> GetDownloadUrlAsync(string bucket, string objectKey, TimeSpan validFor, CancellationToken ct)
     {
-        // SDK synchronous API ile url üretiyor; ct burada kullanılmıyor
         var req = new GetPreSignedUrlRequest
         {
             BucketName = bucket,

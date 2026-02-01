@@ -2,6 +2,7 @@
 using Eventoria.Application.Events.Create;
 using Eventoria.Application.Events.Join;
 using Eventoria.Application.Events.Update;
+using Eventoria.Application.Posts.Queries.GetEventPosts;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -77,6 +78,23 @@ public sealed class EventsController : ControllerBase
         var cmd = new JoinEventCommand(userId, body.Code, body.InviteKey);
         var res = await _mediator.Send(cmd, ct);
 
+        return Ok(res);
+    }
+
+
+    [HttpGet("{eventId:guid}/posts")]
+    [Authorize]
+    public async Task<ActionResult<GetEventPostsResult>> GetPosts(
+    Guid eventId,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20,
+    CancellationToken ct = default)
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userIdStr, out var userId))
+            return Unauthorized();
+
+        var res = await _mediator.Send(new GetEventPostsQuery(userId, eventId, page, pageSize), ct);
         return Ok(res);
     }
 }

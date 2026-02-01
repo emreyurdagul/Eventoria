@@ -18,7 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EventAdminQuota> EventAdminQuotas => Set<EventAdminQuota>();
     public DbSet<MediaFile> MediaFiles => Set<MediaFile>();
-
+    public DbSet<Post> Posts => Set<Post>();
+    public DbSet<PostMedia> PostMedias => Set<PostMedia>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

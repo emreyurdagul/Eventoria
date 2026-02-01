@@ -4,6 +4,8 @@ using Eventoria.Infrastructure;
 using Eventoria.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
 
 builder.Services
     .AddApi(builder.Configuration)

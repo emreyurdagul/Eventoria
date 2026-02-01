@@ -120,9 +120,27 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
 
     private static string BuildObjectKey(Guid? eventId, Guid userId, Guid mediaId, string fileName)
     {
-        var safeName = Path.GetFileName(fileName);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var ext = Path.GetExtension(fileName);
+
+        var slug = Slugify(baseName);               // "kampa-fiyat-foyu"
+        var shortId = mediaId.ToString("N")[..8];   // 8 char
+
+        var safeName = $"{slug}-{shortId}{ext}".ToLowerInvariant();
+
         return eventId.HasValue
-            ? $"events/{eventId.Value}/uploads/{userId}/{mediaId}/{safeName}"
-            : $"users/{userId}/uploads/{mediaId}/{safeName}";
+            ? $"events/{eventId.Value}/uploads/{userId}/{safeName}"
+            : $"users/{userId}/uploads/{safeName}";
     }
+
+    private static string Slugify(string s)
+    {
+        // minimal slug: boşlukları '-' yap, tehlikeli karakterleri at
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s.Trim())
+            sb.Append(char.IsLetterOrDigit(ch) ? ch : '-');
+
+        return System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "-{2,}", "-").Trim('-');
+    }
+
 }
