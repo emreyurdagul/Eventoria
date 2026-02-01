@@ -12,6 +12,13 @@ public interface IEventRepository : IRepository<Event>
 
     Task<bool> IsEventAdminAsync(Guid eventId, Guid userId, CancellationToken ct);
 
+
+    Task<IReadOnlyList<MyEventItem>> GetMyEventsPagedAsync(
+        Guid userId,
+        int page,
+        int pageSize,
+        CancellationToken ct);
+
     // ✅ Quota için gerekli
     Task<int> CountCreatedByAsync(Guid adminUserId, CancellationToken ct);
     Task<int> SumParticipantLimitsCreatedByAsync(Guid adminUserId, CancellationToken ct);

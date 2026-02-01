@@ -26,22 +26,7 @@ public sealed class PostsController : ControllerBase
     }
 
 
-    // ✅ 1) Event feed (cover-only)
-    // GET /api/events/{eventId}/posts?page=1&pageSize=20
-    [HttpGet("{eventId:guid}/posts")]
-    public async Task<ActionResult<GetEventPostsResult>> GetPosts(
-        Guid eventId,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
-        CancellationToken ct = default)
-    {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized();
 
-        var res = await _mediator.Send(new GetEventPostsQuery(userId, eventId, page, pageSize), ct);
-        return Ok(res);
-    }
 
 
     [HttpPost]

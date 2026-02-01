@@ -90,6 +90,33 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         return list;
     }
 
+    public async Task<IReadOnlyList<MyEventItem>> GetMyEventsPagedAsync(
+       Guid userId,
+       int page,
+       int pageSize,
+       CancellationToken ct)
+    {
+        var skip = (page - 1) * pageSize;
+
+        return await _db.EventMemberships
+            .AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .OrderByDescending(m => m.Event.CreatedAtUtc)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(m => new MyEventItem(
+                EventId: m.Event.Id,
+                Code: m.Event.Code,
+                Title: m.Event.Title,
+                Date: m.Event.Date,
+                Status: m.Event.Status,
+                MyRole: m.Role,
+                ParticipantLimit: m.Event.Specs.ParticipantLimit,
+                MemberCount: _db.EventMemberships.Count(x => x.EventId == m.EventId)
+            ))
+            .ToListAsync(ct);
+    }
+
     public async Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct)
     {
         // Önce kullanıcı bu eventte member mı? + rolü nedir? (tek query)

@@ -1,6 +1,10 @@
 ﻿using Eventoria.Api.Contracts.Events;
+using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Create;
 using Eventoria.Application.Events.Join;
+using Eventoria.Application.Events.Queries.GetEventDetails;
+using Eventoria.Application.Events.Queries.GetMyEvents;
+using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Application.Events.Update;
 using Eventoria.Application.Posts.Queries.GetEventPosts;
 using MediatR;
@@ -97,4 +101,38 @@ public sealed class EventsController : ControllerBase
         var res = await _mediator.Send(new GetEventPostsQuery(userId, eventId, page, pageSize), ct);
         return Ok(res);
     }
+
+    // ✅ GET /api/events/my?page=1&pageSize=20
+    [HttpGet("my")]
+    public async Task<ActionResult<PagedResult<MyEventItem>>> GetMyEvents(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var userId = GetUserIdOrThrow();
+        var res = await _mediator.Send(
+            new GetMyEventsQuery(userId, page, pageSize),
+            ct);
+
+        return Ok(res);
+    }
+
+
+    // ✅ GET /api/events/{eventId}
+    [HttpGet("{eventId:guid}")]
+    public async Task<ActionResult<GetEventDetailsResult>> GetEventDetails(Guid eventId, CancellationToken ct)
+    {
+        var userId = GetUserIdOrThrow();
+        var res = await _mediator.Send(new GetEventDetailsQuery(userId, eventId), ct);
+        return Ok(res);
+    }
+
+    private Guid GetUserIdOrThrow()
+    {
+        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userIdStr, out var userId))
+            throw new UnauthorizedAccessException("Invalid user id.");
+        return userId;
+    }
+
 }

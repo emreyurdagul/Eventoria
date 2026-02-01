@@ -1,10 +1,12 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+﻿using Eventoria.Application.Abstractions.Identity;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Storage;
 using Eventoria.Application.Auth.Abstractions;
 using Eventoria.Infrastructure.Auth.Identity;
 using Eventoria.Infrastructure.Auth.Jwt;
 using Eventoria.Infrastructure.Auth.RefreshTokens;
 using Eventoria.Infrastructure.Data;
+using Eventoria.Infrastructure.Identity;
 using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
 using Eventoria.Infrastructure.Storage;
@@ -26,12 +28,15 @@ public static class DependencyInjection
         // Persistence
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEventRepository, EventRepository>();
+        services.AddScoped<IPostRepository, PostRepository>();
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 
         // Auth - Clean Architecture (Application abstractions -> Infrastructure implementations)
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<IJwtTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
+        services.AddScoped<IAdminIdentityService, AdminIdentityService>();
+
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
 
         services.AddSingleton<IStorageProviderResolver, StorageProviderResolver>();

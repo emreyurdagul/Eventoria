@@ -17,7 +17,10 @@ public class EventMembership : BaseEntity
     }
 
     public Guid EventId { get; private set; }
+
+    public Event Event { get; private set; }
     public Guid UserId { get; private set; }
+
     public EventRole Role { get; private set; }
 
     public DateTime JoinedAtUtc { get; private set; }

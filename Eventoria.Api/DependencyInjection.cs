@@ -1,11 +1,11 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+﻿using Eventoria.Api.Middleware;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
+using Eventoria.Application.Events.Create;
 using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
@@ -76,12 +76,13 @@ public static class DependencyInjection
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(
-                typeof(Eventoria.Application.Events.Create.CreateEventHandler).Assembly);
+                typeof(CreateEventHandler).Assembly);
         });
 
         // Temporary registrations (idealde Infrastructure'da olur)
         services.AddScoped<IEventAdminQuotaRepository, EventAdminQuotaRepository>();
         services.AddSingleton<IEventTokenService, EventTokenService>();
+        services.AddScoped<ExceptionHandlingMiddleware>();
 
         services.AddAuthorization();
 

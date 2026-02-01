@@ -31,9 +31,9 @@ services:
       Jwt__Issuer: "Eventoria"
       Jwt__Audience: "Eventoria"
       Storage__LocalRoot: "/data/uploads"
-      Storage__PublicBaseUrl: "http://localhost:8080/uploads"
+      Storage__PublicBaseUrl: "http://localhost:8081/uploads"
     ports:
-      - "8080:8080"
+      - "8081:8081"
     volumes:
       - eventoria_uploads:/data/uploads
 
