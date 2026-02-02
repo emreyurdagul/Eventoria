@@ -9,7 +9,7 @@ public sealed record EventDetailsDto(
     string? Description,
     DateOnly? Date,
     EventStatus Status,
-    Guid CreatedByUserId,
+    Guid? CreatedByUserId,
     EventRole MyRole,
     int ParticipantLimit,
     int PhotosPerUserLimit,

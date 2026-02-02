@@ -6,7 +6,7 @@ namespace Eventoria.Application.Posts.Queries.GetEventPosts;
 
 public sealed record EventPostListItemDto(
     Guid PostId,
-    Guid CreatedByUserId,
+    Guid? CreatedByUserId,
     string? Caption,
     DateTime CreatedAtUtc,
     EventPostCoverDto? Cover

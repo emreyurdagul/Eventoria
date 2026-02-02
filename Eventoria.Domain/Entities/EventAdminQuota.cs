@@ -6,7 +6,7 @@ public sealed class EventAdminQuota : BaseEntity
 {
     private EventAdminQuota() { } // EF
 
-    public EventAdminQuota(Guid adminUserId, int maxEvents, int maxTotalParticipants)
+    public EventAdminQuota(Guid? adminUserId, int maxEvents, int maxTotalParticipants)
     {
         if (adminUserId == Guid.Empty) throw new ArgumentException("AdminUserId required", nameof(adminUserId));
         if (maxEvents <= 0) throw new ArgumentOutOfRangeException(nameof(maxEvents));
@@ -21,7 +21,7 @@ public sealed class EventAdminQuota : BaseEntity
         IsActive = true;
     }
 
-    public Guid AdminUserId { get; private set; }
+    public Guid? AdminUserId { get; private set; }
 
     public int MaxEvents { get; private set; }
     public int MaxTotalParticipants { get; private set; }

@@ -37,10 +37,10 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
             m.UserId == userId &&
             m.Role == EventRole.Admin, ct);
 
-    public Task<int> CountCreatedByAsync(Guid adminUserId, CancellationToken ct)
+    public Task<int> CountCreatedByAsync(Guid? adminUserId, CancellationToken ct)
     => _db.Events.CountAsync(e => e.CreatedByUserId == adminUserId, ct);
 
-    public async Task<int> SumParticipantLimitsCreatedByAsync(Guid adminUserId, CancellationToken ct)
+    public async Task<int> SumParticipantLimitsCreatedByAsync(Guid? adminUserId, CancellationToken ct)
     {
         // Eğer Specs null olabilir diyorsan:
         // return await _db.Events

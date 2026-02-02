@@ -1,5 +1,6 @@
 ﻿using Eventoria.Application.Abstractions.Identity;
 using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Security;
 using Eventoria.Application.Abstractions.Storage;
 using Eventoria.Application.Auth.Abstractions;
 using Eventoria.Infrastructure.Auth.Identity;
@@ -36,6 +37,10 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
+        services.AddScoped<IEventGuestRepository, EventGuestRepository>();
+        services.AddScoped<IGuestTokenService, GuestTokenService>();
+        services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
+        services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
 
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
 

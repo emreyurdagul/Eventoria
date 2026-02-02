@@ -8,7 +8,7 @@ public sealed class Post : AggregateRoot
 
     private Post() { } // EF
 
-    public Post(Guid eventId, Guid createdByUserId, string? caption)
+    public Post(Guid eventId, Guid? createdByUserId, string? caption)
     {
         if (eventId == Guid.Empty) throw new ArgumentException("EventId required");
         if (createdByUserId == Guid.Empty) throw new ArgumentException("CreatedByUserId required");
@@ -20,7 +20,12 @@ public sealed class Post : AggregateRoot
     }
 
     public Guid EventId { get; private set; }
-    public Guid CreatedByUserId { get; private set; }
+    public Guid? CreatedByUserId { get; private set; }
+    public Guid? CreatedByGuestId { get; private set; }
+
+    // Owner check helper (kolaylık)
+    public bool IsOwnedByUser(Guid userId) => CreatedByUserId.HasValue && CreatedByUserId.Value == userId;
+    public bool IsOwnedByGuest(Guid guestId) => CreatedByGuestId.HasValue && CreatedByGuestId.Value == guestId;
     public string? Caption { get; private set; }
 
     public IReadOnlyCollection<PostMedia> Media => _media;

@@ -15,11 +15,11 @@ public sealed class EventAdminQuotaRepository
         _db = db;
     }
 
-    public Task<EventAdminQuota?> GetActiveForAdminAsync(Guid adminUserId, CancellationToken ct)
+    public Task<EventAdminQuota?> GetActiveForAdminAsync(Guid? adminUserId, CancellationToken ct)
         => _db.Set<EventAdminQuota>()
             .FirstOrDefaultAsync(x => x.AdminUserId == adminUserId && x.IsActive, ct);
 
-    public async Task DeactivateAllForAdminAsync(Guid adminUserId, CancellationToken ct)
+    public async Task DeactivateAllForAdminAsync(Guid? adminUserId, CancellationToken ct)
     {
         var actives = await _db.Set<EventAdminQuota>()
             .Where(x => x.AdminUserId == adminUserId && x.IsActive)

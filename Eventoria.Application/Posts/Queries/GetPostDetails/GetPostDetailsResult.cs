@@ -6,7 +6,7 @@ namespace Eventoria.Application.Posts.Queries.GetPostDetails;
 public sealed record GetPostDetailsResult(
     Guid PostId,
     Guid EventId,
-    Guid CreatedByUserId,
+    Guid? CreatedByUserId,
     string? Caption,
     DateTime CreatedAtUtc,
     List<PostMediaDto> Media

@@ -70,6 +70,28 @@ public static class DependencyInjection
                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
                   ClockSkew = TimeSpan.FromMinutes(2)
               };
+          })
+          .AddCookie("External", opt =>
+          {
+              opt.Cookie.Name = "eventoria.external";
+              opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+          })
+          .AddGoogle("Google", opt =>
+          {
+              opt.ClientId = config["Authentication:Google:ClientId"]
+                  ?? throw new InvalidOperationException("Google ClientId missing");
+              opt.ClientSecret = config["Authentication:Google:ClientSecret"]
+                  ?? throw new InvalidOperationException("Google ClientSecret missing");
+
+              // Google sign-in sonucu temporary cookie’ye yazılacak
+              opt.SignInScheme = "External";
+
+              // Callback endpoint'in path'i (controller route ile aynı olmalı)
+              opt.CallbackPath = "/api/auth/external/google/callback";
+
+              // Email claim gelmesi için scope
+              opt.Scope.Add("email");
+              opt.Scope.Add("profile");
           });
 
         // MediatR

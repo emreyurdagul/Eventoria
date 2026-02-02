@@ -3,7 +3,7 @@
 namespace Eventoria.Application.Billing.AssignQuota;
 
 public sealed record AssignQuotaCommand(
-    Guid AdminUserId,
+    Guid? AdminUserId,
     int MaxEvents,
     int MaxTotalParticipants
 ) : IRequest<AssignQuotaResult>;
