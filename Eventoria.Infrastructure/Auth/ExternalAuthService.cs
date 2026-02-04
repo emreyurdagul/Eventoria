@@ -2,6 +2,7 @@
 using Eventoria.Application.Auth.Abstractions;
 using Eventoria.Application.Auth.Contracts;
 using Eventoria.Application.Auth.External;
+using Eventoria.Infrastructure.Identity;
 using Eventoria.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;

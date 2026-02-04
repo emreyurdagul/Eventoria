@@ -1,12 +1,18 @@
+using Eventoria.Api.Contracts.Auth;
 using Eventoria.Application.Auth.Contracts;
 using Eventoria.Application.Auth.ForgotPassword;
+using Eventoria.Application.Auth.GuestJoin;
 using Eventoria.Application.Auth.Login;
 using Eventoria.Application.Auth.Logout;
 using Eventoria.Application.Auth.Refresh;
 using Eventoria.Application.Auth.Register;
 using Eventoria.Application.Auth.ResetPassword;
+using Eventoria.Application.Auth.UpgradeGuest;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Eventoria.Api.Controllers;
 
@@ -55,4 +61,33 @@ public sealed class AuthController : ControllerBase
         await _mediator.Send(new ResetPasswordCommand(req), ct);
         return Ok(new { message = "Password reset successful." });
     }
+
+    [HttpPost("join")]
+    [AllowAnonymous]
+    public async Task<ActionResult<GuestAuthResponse>> Join([FromBody] GuestJoinBody body, CancellationToken ct)
+    {
+        var cmd = new GuestJoinCommand(
+            EventId: body.EventId,
+            EventCode: body.EventCode,
+            InviteKey: body.InviteKey,
+            DisplayName: body.DisplayName);
+
+        var res = await _mediator.Send(cmd, ct);
+        return Ok(res);
+    }
+
+    [HttpPost("upgrade")]
+    [Authorize]
+    public Task<AuthResponse> Upgrade([FromBody] GuestUpgradeBody req, CancellationToken ct)
+    {
+        var idStr =
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+
+        if (!Guid.TryParse(idStr, out var userId))
+            throw new UnauthorizedAccessException("Invalid token.");
+
+        return _mediator.Send(new UpgradeCommand(userId, req.Email, req.Password ), ct);
+    }
+
 }

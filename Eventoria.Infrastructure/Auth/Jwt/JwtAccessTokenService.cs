@@ -1,4 +1,5 @@
 ﻿using Eventoria.Application.Auth.Abstractions;
+using Eventoria.Infrastructure.Identity;
 using Eventoria.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;

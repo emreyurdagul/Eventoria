@@ -8,4 +8,8 @@ public interface IIdentityService
 
     Task<string?> GeneratePasswordResetTokenAsync(string email, CancellationToken ct);
     Task<(bool Success, string? Error)> ResetPasswordAsync(string email, string token, string newPassword, CancellationToken ct);
+
+    // ✅ NEW
+    Task<(Guid UserId, string? Error)> CreateGuestAsync(Guid eventId, string displayName, CancellationToken ct);
+    Task<(Guid UserId, string? Error)> UpgradeGuestAsync(Guid currentUserId, string email, string password, string? displayName, CancellationToken ct);
 }

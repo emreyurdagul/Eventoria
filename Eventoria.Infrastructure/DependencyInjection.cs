@@ -37,11 +37,10 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
-        services.AddScoped<IEventGuestRepository, EventGuestRepository>();
         services.AddScoped<IGuestTokenService, GuestTokenService>();
         services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
         services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
-
+        services.AddScoped<IGuestIdentityService, GuestIdentityService>();
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
 
         services.AddSingleton<IStorageProviderResolver, StorageProviderResolver>();
