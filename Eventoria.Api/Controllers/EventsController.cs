@@ -1,4 +1,6 @@
 ﻿using Eventoria.Api.Contracts.Events;
+using Eventoria.Application.Abstractions;
+using Eventoria.Application.Abstractions.Auth;
 using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Create;
 using Eventoria.Application.Events.Join;
@@ -8,9 +10,9 @@ using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Application.Events.Update;
 using Eventoria.Application.Posts.Queries.GetEventPosts;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Eventoria.Api.Controllers;
 
@@ -19,22 +21,20 @@ namespace Eventoria.Api.Controllers;
 public sealed class EventsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _current;
 
-    public EventsController(IMediator mediator)
+    public EventsController(IMediator mediator, ICurrentUserService current)
     {
         _mediator = mediator;
+        _current = current;
     }
 
     [HttpPost]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<CreateEventResult>> Create([FromBody] CreateEventRequestBody body, CancellationToken ct)
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized();
-
         var cmd = new CreateEventCommand(
-            userId,
+            _current.UserId,
             body.Title,
             body.Description,
             body.Date,
@@ -43,21 +43,15 @@ public sealed class EventsController : ControllerBase
             body.VideosPerUserLimit
         );
 
-        var res = await _mediator.Send(cmd, ct);
-        return Ok(res);
+        return Ok(await _mediator.Send(cmd, ct));
     }
 
-
     [HttpPut("{eventId:guid}")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<UpdateEventResult>> Update(Guid eventId, [FromBody] UpdateEventRequestBody body, CancellationToken ct)
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized();
-
         var cmd = new UpdateEventCommand(
-            userId,
+            _current.UserId,
             eventId,
             body.Title,
             body.Description,
@@ -67,72 +61,45 @@ public sealed class EventsController : ControllerBase
             body.VideosPerUserLimit
         );
 
-        var res = await _mediator.Send(cmd, ct);
-        return Ok(res);
+        return Ok(await _mediator.Send(cmd, ct));
     }
 
     [HttpPost("join")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<JoinEventResult>> Join([FromBody] JoinEventBody body, CancellationToken ct)
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized();
-
-        var cmd = new JoinEventCommand(userId, body.Code, body.InviteKey);
-        var res = await _mediator.Send(cmd, ct);
-
-        return Ok(res);
+        var cmd = new JoinEventCommand(_current.UserId, body.Code, body.InviteKey);
+        return Ok(await _mediator.Send(cmd, ct));
     }
-
 
     [HttpGet("{eventId:guid}/posts")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<GetEventPostsResult>> GetPosts(
-    Guid eventId,
-    [FromQuery] int page = 1,
-    [FromQuery] int pageSize = 20,
-    CancellationToken ct = default)
+        Guid eventId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            return Unauthorized();
-
-        var res = await _mediator.Send(new GetEventPostsQuery(userId, eventId, page, pageSize), ct);
+        var res = await _mediator.Send(new GetEventPostsQuery(_current.UserId, eventId, page, pageSize), ct);
         return Ok(res);
     }
 
-    // ✅ GET /api/events/my?page=1&pageSize=20
     [HttpGet("my")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<PagedResult<MyEventItem>>> GetMyEvents(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var userId = GetUserIdOrThrow();
-        var res = await _mediator.Send(
-            new GetMyEventsQuery(userId, page, pageSize),
-            ct);
-
+        var res = await _mediator.Send(new GetMyEventsQuery(_current.UserId, page, pageSize), ct);
         return Ok(res);
     }
 
-
-    // ✅ GET /api/events/{eventId}
     [HttpGet("{eventId:guid}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public async Task<ActionResult<GetEventDetailsResult>> GetEventDetails(Guid eventId, CancellationToken ct)
     {
-        var userId = GetUserIdOrThrow();
-        var res = await _mediator.Send(new GetEventDetailsQuery(userId, eventId), ct);
+        var res = await _mediator.Send(new GetEventDetailsQuery(_current.UserId, eventId), ct);
         return Ok(res);
     }
-
-    private Guid GetUserIdOrThrow()
-    {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(userIdStr, out var userId))
-            throw new UnauthorizedAccessException("Invalid user id.");
-        return userId;
-    }
-
 }

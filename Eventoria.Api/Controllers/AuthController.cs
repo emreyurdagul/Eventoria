@@ -9,6 +9,7 @@ using Eventoria.Application.Auth.Register;
 using Eventoria.Application.Auth.ResetPassword;
 using Eventoria.Application.Auth.UpgradeGuest;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.IdentityModel.Tokens.Jwt;
@@ -77,7 +78,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("upgrade")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public Task<AuthResponse> Upgrade([FromBody] GuestUpgradeBody req, CancellationToken ct)
     {
         var idStr =

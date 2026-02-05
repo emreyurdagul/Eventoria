@@ -7,6 +7,7 @@ using Eventoria.Application.Posts.Queries.GetPostDetails;
 using Eventoria.Application.Posts.Reorder;
 using Eventoria.Application.Posts.Update;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -15,7 +16,7 @@ namespace Eventoria.Api.Controllers;
 
 [ApiController]
 [Route("api/posts")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public sealed class PostsController : ControllerBase
 {
     private readonly IMediator _mediator;

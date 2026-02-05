@@ -6,6 +6,7 @@ using Eventoria.Infrastructure.Persistence;
 using Eventoria.Infrastructure.Security;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
@@ -51,49 +52,57 @@ public static class DependencyInjection
         var issuer = config["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
         var audience = config["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
 
-        services
-          .AddAuthentication(options =>
-          {
-              options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-              options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-          })
-          .AddJwtBearer(opt =>
-          {
-              opt.TokenValidationParameters = new TokenValidationParameters
-              {
-                  ValidateIssuer = true,
-                  ValidateAudience = true,
-                  ValidateLifetime = true,
-                  ValidateIssuerSigningKey = true,
-                  ValidIssuer = issuer,
-                  ValidAudience = audience,
-                  IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
-                  ClockSkew = TimeSpan.FromMinutes(2)
-              };
-          })
-          .AddCookie("External", opt =>
-          {
-              opt.Cookie.Name = "eventoria.external";
-              opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
-          })
-          .AddGoogle("Google", opt =>
-          {
-              opt.ClientId = config["Authentication:Google:ClientId"]
-                  ?? throw new InvalidOperationException("Google ClientId missing");
-              opt.ClientSecret = config["Authentication:Google:ClientSecret"]
-                  ?? throw new InvalidOperationException("Google ClientSecret missing");
+        services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "Smart";
+            options.DefaultChallengeScheme = "Smart";
+        })
+        .AddPolicyScheme("Smart", "Smart", options =>
+        {
+            options.ForwardDefaultSelector = context =>
+            {
+                var auth = context.Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrEmpty(auth) &&
+                    auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return JwtBearerDefaults.AuthenticationScheme;
+                }
 
-              // Google sign-in sonucu temporary cookie’ye yazılacak
-              opt.SignInScheme = "External";
+                // Identity cookie (UI / external flow fallback)
+                return IdentityConstants.ApplicationScheme; // "Identity.Application"
+            };
+        })
+        .AddJwtBearer(opt =>
+        {
+            opt.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = issuer,
+                ValidAudience = audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                ClockSkew = TimeSpan.FromMinutes(2)
+            };
+        })
+        .AddCookie("External", opt =>
+        {
+            opt.Cookie.Name = "eventoria.external";
+            opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+        })
+        .AddGoogle("Google", opt =>
+        {
+            opt.ClientId = config["Authentication:Google:ClientId"]
+                ?? throw new InvalidOperationException("Google ClientId missing");
+            opt.ClientSecret = config["Authentication:Google:ClientSecret"]
+                ?? throw new InvalidOperationException("Google ClientSecret missing");
 
-              // Callback endpoint'in path'i (controller route ile aynı olmalı)
-              opt.CallbackPath = "/api/auth/external/google/callback";
-
-              // Email claim gelmesi için scope
-              opt.Scope.Add("email");
-              opt.Scope.Add("profile");
-          });
-
+            opt.SignInScheme = "External";
+            opt.CallbackPath = "/api/auth/external/google/callback";
+            opt.Scope.Add("email");
+            opt.Scope.Add("profile");
+        });
         // MediatR
         services.AddMediatR(cfg =>
         {

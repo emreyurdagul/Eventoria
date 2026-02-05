@@ -1,4 +1,5 @@
-﻿using Eventoria.Application.Abstractions.Identity;
+﻿using Eventoria.Application.Abstractions.Auth;
+using Eventoria.Application.Abstractions.Identity;
 using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
 using Eventoria.Application.Abstractions.Storage;
@@ -42,7 +43,8 @@ public static class DependencyInjection
         services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
         services.AddScoped<IGuestIdentityService, GuestIdentityService>();
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
-
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IStorageProviderResolver, StorageProviderResolver>();
 
         services.AddScoped<IMediaFileRepository, MediaFileRepository>();
