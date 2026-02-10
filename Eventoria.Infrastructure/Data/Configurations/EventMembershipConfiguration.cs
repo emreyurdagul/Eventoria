@@ -1,4 +1,4 @@
-﻿using Eventoria.Domain.Entities;
+using Eventoria.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,10 +14,17 @@ public class EventMembershipConfiguration : IEntityTypeConfiguration<EventMember
 
         b.Property(x => x.EventId).IsRequired();
         b.Property(x => x.UserId).IsRequired();
-
-        b.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
-
+        b.Property(x => x.Role).IsRequired();
         b.Property(x => x.JoinedAtUtc).IsRequired();
+
+        // Foreign key to Event
+        b.HasOne(x => x.Event)
+            .WithMany(e => e.Memberships)
+            .HasForeignKey(x => x.EventId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Unique constraint: bir kullanici bir event'e sadece bir kez katilabilir
+        b.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
 
         // BaseEntity fields
         b.Property(x => x.CreatedAtUtc).IsRequired();
@@ -26,8 +33,5 @@ public class EventMembershipConfiguration : IEntityTypeConfiguration<EventMember
             .HasMaxLength(64)
             .IsConcurrencyToken()
             .IsRequired();
-
-        b.HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
-
     }
 }

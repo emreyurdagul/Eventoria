@@ -1,10 +1,12 @@
-﻿using Eventoria.Api.Contracts.Events;
+using Eventoria.Api.Contracts.Events;
 using Eventoria.Application.Abstractions;
 using Eventoria.Application.Abstractions.Auth;
+using Eventoria.Application.Admin.Events.Models;
 using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Create;
 using Eventoria.Application.Events.Join;
 using Eventoria.Application.Events.Queries.GetEventDetails;
+using Eventoria.Application.Events.Queries.GetMyEventMembers;
 using Eventoria.Application.Events.Queries.GetMyEvents;
 using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Application.Events.Update;
@@ -100,6 +102,21 @@ public sealed class EventsController : ControllerBase
     public async Task<ActionResult<GetEventDetailsResult>> GetEventDetails(Guid eventId, CancellationToken ct)
     {
         var res = await _mediator.Send(new GetEventDetailsQuery(_current.UserId, eventId), ct);
+        return Ok(res);
+    }
+
+    [HttpGet("{eventId:guid}/members")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<ActionResult<PagedResult<EventMemberDto>>> GetMyEventMembers(
+        Guid eventId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var res = await _mediator.Send(
+            new GetMyEventMembersQuery(_current.UserId, eventId, page, pageSize),
+            ct);
+
         return Ok(res);
     }
 }

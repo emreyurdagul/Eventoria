@@ -1,4 +1,4 @@
-﻿using Eventoria.Application.Abstractions.Auth;
+using Eventoria.Application.Abstractions.Auth;
 using Eventoria.Application.Abstractions.Identity;
 using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
@@ -27,11 +27,16 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(opt =>
             opt.UseNpgsql(config.GetConnectionString("Postgres")));
 
+        // Domain Event Dispatcher
+        services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+
         // Persistence
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IEventRepository, EventRepository>();
         services.AddScoped<IPostRepository, PostRepository>();
+        services.AddScoped<IEventAdminQuotaRepository, EventAdminQuotaRepository>();
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
+        services.AddScoped<IMediaFileRepository, MediaFileRepository>();
 
         // Auth - Clean Architecture (Application abstractions -> Infrastructure implementations)
         services.AddScoped<IIdentityService, IdentityService>();
@@ -40,14 +45,14 @@ public static class DependencyInjection
         services.AddScoped<IAdminIdentityService, AdminIdentityService>();
         services.AddScoped<IGuestTokenService, GuestTokenService>();
         services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
-        services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
         services.AddScoped<IGuestIdentityService, GuestIdentityService>();
+        
+        // Storage & Configuration
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IStorageProviderResolver, StorageProviderResolver>();
 
-        services.AddScoped<IMediaFileRepository, MediaFileRepository>();
         // Identity (UserManager, RoleManager, SignInManager, token providers)
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(opt =>
         {

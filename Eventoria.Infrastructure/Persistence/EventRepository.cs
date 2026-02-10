@@ -1,4 +1,6 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Admin.Events.Models;
+using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Domain.Entities;
 using Eventoria.Domain.Enums;
@@ -42,11 +44,6 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
     public async Task<int> SumParticipantLimitsCreatedByAsync(Guid? adminUserId, CancellationToken ct)
     {
-        // Eğer Specs null olabilir diyorsan:
-        // return await _db.Events
-        //   .Where(e => e.CreatedByUserId == adminUserId)
-        //   .SumAsync(e => (int?)e.Specs.ParticipantLimit ?? 0, ct);
-
         return await _db.Events
             .Where(e => e.CreatedByUserId == adminUserId)
             .SumAsync(e => e.Specs.ParticipantLimit, ct);
@@ -119,7 +116,6 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
     public async Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct)
     {
-        // Önce kullanıcı bu eventte member mı? + rolü nedir? (tek query)
         var row = await _db.EventMemberships
             .Where(m => m.EventId == eventId && m.UserId == userId)
             .Select(m => new { m.Role })
@@ -130,7 +126,6 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
         var role = row.Role;
 
-        // Event detayları (projection)
         var dto = await _db.Events
             .Where(e => e.Id == eventId)
             .Select(e => new EventDetailsDto(
@@ -155,4 +150,32 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         return dto;
     }
 
+    public async Task<PagedResult<EventMemberDto>> GetEventMembersAsync(Guid eventId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = _db.EventMemberships
+            .AsNoTracking()
+            .Where(m => m.EventId == eventId);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderBy(m => m.JoinedAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Join(
+                _db.Users,
+                m => m.UserId,
+                u => u.Id,
+                (m, u) => new EventMemberDto(
+                    u.Id,
+                    u.Email ?? string.Empty,
+                    u.DisplayName,
+                    m.Role,
+                    m.JoinedAtUtc
+                )
+            )
+            .ToListAsync(ct);
+
+        return new PagedResult<EventMemberDto>(items, page, pageSize, total);
+    }
 }

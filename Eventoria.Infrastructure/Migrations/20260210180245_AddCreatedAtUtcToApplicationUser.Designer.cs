@@ -3,6 +3,7 @@ using System;
 using Eventoria.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Eventoria.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260210180245_AddCreatedAtUtcToApplicationUser")]
+    partial class AddCreatedAtUtcToApplicationUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -166,6 +169,9 @@ namespace Eventoria.Infrastructure.Migrations
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("EventId1")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("JoinedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -179,6 +185,8 @@ namespace Eventoria.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EventId1");
 
                     b.HasIndex("EventId", "UserId")
                         .IsUnique();
@@ -628,9 +636,15 @@ namespace Eventoria.Infrastructure.Migrations
 
             modelBuilder.Entity("Eventoria.Domain.Entities.EventMembership", b =>
                 {
-                    b.HasOne("Eventoria.Domain.Entities.Event", "Event")
+                    b.HasOne("Eventoria.Domain.Entities.Event", null)
                         .WithMany("Memberships")
                         .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Eventoria.Domain.Entities.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

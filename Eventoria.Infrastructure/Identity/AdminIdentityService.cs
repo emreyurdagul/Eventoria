@@ -1,4 +1,6 @@
-﻿using Eventoria.Application.Abstractions.Identity;
+using Eventoria.Application.Abstractions.Identity;
+using Eventoria.Application.Admin.Users.Models;
+using Eventoria.Application.Common.Models;
 using Eventoria.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 
@@ -68,5 +70,25 @@ public sealed class AdminIdentityService : IAdminIdentityService
         var res = await _users.AddToRoleAsync(user, role);
         if (!res.Succeeded)
             throw new InvalidOperationException(string.Join(" | ", res.Errors.Select(e => e.Description)));
+    }
+
+    public async Task<PagedResult<EventAdminDto>> GetUsersByRoleAsync(string role, int page, int pageSize, CancellationToken ct)
+    {
+        var usersInRole = await _users.GetUsersInRoleAsync(role);
+        
+        var total = usersInRole.Count;
+        var items = usersInRole
+            .OrderBy(u => u.Email)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(u => new EventAdminDto(
+                u.Id,
+                u.Email ?? string.Empty,
+                u.DisplayName,
+                u.CreatedAtUtc
+            ))
+            .ToList();
+
+        return new PagedResult<EventAdminDto>(items, page, pageSize, total);
     }
 }

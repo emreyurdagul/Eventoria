@@ -1,6 +1,7 @@
 ﻿using Eventoria.Api.Contracts.AdminQuotas;
 using Eventoria.Application.Billing.AssignQuota;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,7 @@ namespace Eventoria.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/quotas")]
-[Authorize(Roles = "SuperAdmin")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "SuperUser")]
 public sealed class AdminQuotasController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -24,7 +25,7 @@ public sealed class AdminQuotasController : ControllerBase
         CancellationToken ct)
     {
         var cmd = new AssignQuotaCommand(
-            body.AdminUserId,
+            body.UserId,
             body.MaxEvents,
             body.MaxTotalParticipants);
 
