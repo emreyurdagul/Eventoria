@@ -1,4 +1,4 @@
-ï»¿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
 using Eventoria.Application.Auth.Abstractions;
 using Eventoria.Application.Auth.Contracts;
@@ -43,17 +43,20 @@ public sealed class GuestJoinHandler : IRequestHandler<GuestJoinCommand, GuestAu
             var ev = await _events.GetByCodeAsync(cmd.EventCode.Trim(), innerCt)
                 ?? throw new InvalidOperationException("Event not found.");
 
-            // EventId doÄŸrulamasÄ± istersen:
+            // EventId doðrulamasý istersen:
             if (cmd.EventId != Guid.Empty && cmd.EventId != ev.Id)
                 throw new InvalidOperationException("Event mismatch.");
 
-            // Invite doÄŸrula (active invite hash)
-            var active = ev.Invites.FirstOrDefault(x => x.IsActive)
-                ?? throw new InvalidOperationException("Invite is not active.");
-
+            // Gönderilen invite key'in hash'ini hesapla
             var inviteHash = _tokens.Sha256Hex(cmd.InviteKey.Trim());
-            if (!CryptographicEquals(active.InviteKeyHash, inviteHash))
-                throw new UnauthorizedAccessException("Invalid invite key.");
+
+            // Tüm aktif invite'lar içinde bu hash'e sahip olan var mý kontrol et
+            var matchingInvite = ev.Invites
+                .Where(x => x.IsActive)
+                .FirstOrDefault(x => CryptographicEquals(x.InviteKeyHash, inviteHash));
+
+            if (matchingInvite == null)
+                throw new UnauthorizedAccessException("Invalid or inactive invite key.");
 
             // Guest user yarat
             var guestUserId = await _guestIdentity.CreateGuestUserAsync(cmd.DisplayName.Trim(), ev.Id, innerCt);
@@ -61,7 +64,7 @@ public sealed class GuestJoinHandler : IRequestHandler<GuestJoinCommand, GuestAu
             // Membership ekle (participant)
             ev.AddMembership(guestUserId, EventRole.Participant);
 
-            // Token Ã¼ret
+            // Token üret
             var access = await _jwt.CreateAccessTokenAsync(guestUserId, innerCt);
             var refresh = await _refresh.IssueAsync(guestUserId, innerCt);
 

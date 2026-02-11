@@ -1,4 +1,4 @@
-ï»¿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
 using Eventoria.Domain.Enums;
 using MediatR;
@@ -31,7 +31,7 @@ public sealed class JoinEventHandler : IRequestHandler<JoinEventCommand, JoinEve
             var ev = await _events.GetByCodeAsync(cmd.Code.Trim(), innerCt)
                 ?? throw new InvalidOperationException("Event not found.");
 
-            // Zaten Ã¼ye mi?
+            // Zaten üye mi?
             var alreadyMember = await _events.IsMemberAsync(ev.Id, cmd.UserId, innerCt);
             if (alreadyMember)
                 return new JoinEventResult(ev.Id); // idempotent
@@ -40,15 +40,16 @@ public sealed class JoinEventHandler : IRequestHandler<JoinEventCommand, JoinEve
             if (ev.Memberships.Count >= ev.Specs.ParticipantLimit)
                 throw new InvalidOperationException("Event is full.");
 
-            // Aktif invite
-            var activeInvite = ev.Invites.FirstOrDefault(x => x.IsActive);
-            if (activeInvite == null)
-                throw new InvalidOperationException("Invite is not active.");
-
-            // Invite doÄŸrulama
+            // Gönderilen invite key'in hash'ini hesapla
             var inviteHash = _tokens.Sha256Hex(cmd.InviteKey.Trim());
-            if (!_tokens.FixedTimeEquals(activeInvite.InviteKeyHash, inviteHash))
-                throw new UnauthorizedAccessException("Invalid invite key.");
+
+            // Tüm aktif invite'lar içinde bu hash'e sahip olan var mý kontrol et
+            var matchingInvite = ev.Invites
+                .Where(x => x.IsActive)
+                .FirstOrDefault(x => _tokens.FixedTimeEquals(x.InviteKeyHash, inviteHash));
+
+            if (matchingInvite == null)
+                throw new UnauthorizedAccessException("Invalid or inactive invite key.");
 
             // Membership ekle
             ev.AddMembership(cmd.UserId, EventRole.Participant);

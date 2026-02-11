@@ -28,4 +28,6 @@ public interface IEventRepository : IRepository<Event>
     Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct);
     
     Task<PagedResult<EventMemberDto>> GetEventMembersAsync(Guid eventId, int page, int pageSize, CancellationToken ct);
+    
+    Task DeactivateActiveInvitesAsync(Guid eventId, CancellationToken ct);
 }

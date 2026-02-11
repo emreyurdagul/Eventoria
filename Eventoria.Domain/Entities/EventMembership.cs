@@ -9,7 +9,6 @@ public class EventMembership : BaseEntity
 
     internal EventMembership(Guid eventId, Guid userId, EventRole role)
     {
-        Id = Guid.NewGuid();
         EventId = eventId;
         UserId = userId;
         Role = role;

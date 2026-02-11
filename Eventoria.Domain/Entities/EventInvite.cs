@@ -8,7 +8,6 @@ public class EventInvite : BaseEntity
 
     internal EventInvite(Guid eventId, string inviteKeyHash)
     {
-        Id = Guid.NewGuid();
         EventId = eventId;
         InviteKeyHash = inviteKeyHash;
         IsActive = true;

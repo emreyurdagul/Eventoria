@@ -12,7 +12,6 @@ public class Event : AggregateRoot
 
     public Event(string title, string? description, DateOnly? date, Guid creatorUserId, string code, EventSpecs specs)
     {
-        Id = Guid.NewGuid();
         Title = title;
         Description = description;
         Date = date;
@@ -50,6 +49,11 @@ public class Event : AggregateRoot
         foreach (var inv in _invites.Where(i => i.IsActive))
             inv.Deactivate();
 
+        _invites.Add(new EventInvite(Id, inviteHash));
+    }
+
+    public void AddInviteWithoutDeactivation(string inviteHash)
+    {
         _invites.Add(new EventInvite(Id, inviteHash));
     }
 

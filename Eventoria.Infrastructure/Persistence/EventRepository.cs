@@ -178,4 +178,17 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
         return new PagedResult<EventMemberDto>(items, page, pageSize, total);
     }
+
+    public async Task DeactivateActiveInvitesAsync(Guid eventId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        await _db.EventInvites
+            .Where(i => i.EventId == eventId && i.IsActive)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(i => i.IsActive, false)
+                .SetProperty(i => i.RotatedAtUtc, now)
+                .SetProperty(i => i.UpdatedAtUtc, now)
+                .SetProperty(i => i.ConcurrencyStamp, Guid.NewGuid().ToString("N")),
+                ct);
+    }
 }
