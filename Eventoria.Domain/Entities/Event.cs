@@ -12,6 +12,7 @@ public class Event : AggregateRoot
 
     public Event(string title, string? description, DateOnly? date, Guid creatorUserId, string code, EventSpecs specs)
     {
+        Id = Guid.NewGuid();
         Title = title;
         Description = description;
         Date = date;
@@ -44,17 +45,17 @@ public class Event : AggregateRoot
         _memberships.Add(new EventMembership(Id, userId, role));
     }
 
-    public void AddInvite(string inviteHash)
+    public void AddInvite(string inviteHash, string? encryptedInviteKey)
     {
         foreach (var inv in _invites.Where(i => i.IsActive))
             inv.Deactivate();
 
-        _invites.Add(new EventInvite(Id, inviteHash));
+        _invites.Add(new EventInvite(Id, inviteHash, encryptedInviteKey));
     }
 
-    public void AddInviteWithoutDeactivation(string inviteHash)
+    public void AddInviteWithoutDeactivation(string inviteHash, string? encryptedInviteKey)
     {
-        _invites.Add(new EventInvite(Id, inviteHash));
+        _invites.Add(new EventInvite(Id, inviteHash, encryptedInviteKey));
     }
 
     public void UpdateSpecs(EventSpecs specs)

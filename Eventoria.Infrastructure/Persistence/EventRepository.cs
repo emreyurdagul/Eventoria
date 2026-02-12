@@ -24,6 +24,13 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         .Include(e => e.Memberships)
         .FirstOrDefaultAsync(e => e.Id == eventId, ct);
 
+    public async Task<Event?> GetByIdWithIncludesAsNoTrackingAsync(Guid eventId, CancellationToken ct)
+    => await _db.Events
+        .AsNoTracking()
+        .Include(e => e.Invites)
+        .Include(e => e.Memberships)
+        .FirstOrDefaultAsync(e => e.Id == eventId, ct);
+
     public Task<bool> CodeExistsAsync(string code, CancellationToken ct)
         => _db.Events.AnyAsync(e => e.Code == code, ct);
 
@@ -132,7 +139,7 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 Title: e.Title,
                 Date: e.Date,
                 Status: e.Status,
-                MyRole: EventRole.Admin, // SuperAdmin için tüm etkinliklerde Admin rolü varsayýlýr
+                MyRole: EventRole.Admin,
                 ParticipantLimit: e.Specs.ParticipantLimit,
                 MemberCount: _db.EventMemberships.Count(x => x.EventId == e.Id)
             ))
@@ -193,7 +200,7 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 e.Date,
                 e.Status,
                 e.CreatedByUserId,
-                EventRole.Admin, // SuperAdmin için Admin rolü
+                EventRole.Admin,
                 e.Specs.ParticipantLimit,
                 e.Specs.PhotosPerUserLimit,
                 e.Specs.VideosPerUserLimit,

@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IEventAdminQuotaRepository, EventAdminQuotaRepository>();
         services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
         services.AddScoped<IMediaFileRepository, MediaFileRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
         // Auth - Clean Architecture (Application abstractions -> Infrastructure implementations)
         services.AddScoped<IIdentityService, IdentityService>();
@@ -46,6 +47,9 @@ public static class DependencyInjection
         services.AddScoped<IGuestTokenService, GuestTokenService>();
         services.AddScoped<IExternalIdentityService, ExternalIdentityService>();
         services.AddScoped<IGuestIdentityService, GuestIdentityService>();
+        
+        // Security
+        services.AddScoped<IEncryptionService, EncryptionService>();  // YENÝ
         
         // Storage & Configuration
         services.Configure<StorageOptions>(config.GetSection(StorageOptions.SectionName));

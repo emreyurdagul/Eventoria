@@ -1,4 +1,4 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Security;
 using Eventoria.Domain.Entities;
 using Eventoria.Domain.Enums;
@@ -12,17 +12,20 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Cre
     private readonly IEventAdminQuotaRepository _quotas;
     private readonly IUnitOfWork _uow;
     private readonly IEventTokenService _tokens;
+    private readonly IEncryptionService _encryption;
 
     public CreateEventHandler(
         IEventRepository events,
         IEventAdminQuotaRepository quotas,
         IUnitOfWork uow,
-        IEventTokenService tokens)
+        IEventTokenService tokens,
+        IEncryptionService encryption)
     {
         _events = events;
         _quotas = quotas;
         _uow = uow;
         _tokens = tokens;
+        _encryption = encryption;
     }
 
     public async Task<CreateEventResult> Handle(CreateEventCommand cmd, CancellationToken ct)
@@ -70,12 +73,13 @@ public sealed class CreateEventHandler : IRequestHandler<CreateEventCommand, Cre
             // InviteKey plain -> hash
             var inviteKey = _tokens.GenerateInviteKey(32);
             var inviteHash = _tokens.Sha256Hex(inviteKey);
+            var encryptedKey = _encryption.Encrypt(inviteKey);
 
             var specs = new EventSpecs(cmd.ParticipantLimit, cmd.PhotosPerUserLimit, cmd.VideosPerUserLimit);
 
             var ev = new Event(cmd.Title.Trim(), cmd.Description?.Trim(), cmd.Date, cmd.CreatorUserId, code, specs);
             ev.AddMembership(cmd.CreatorUserId, EventRole.Admin);
-            ev.AddInvite(inviteHash);
+            ev.AddInvite(inviteHash, encryptedKey);
 
             await _events.AddAsync(ev, innerCt);
             await _uow.SaveChangesAsync(innerCt);

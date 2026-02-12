@@ -1,18 +1,21 @@
 using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Security;
 using MediatR;
 
 namespace Eventoria.Application.Events.Invites.GetActive;
 
-public sealed class GetActiveInviteHandler : IRequestHandler<GetActiveInviteQuery, GetActiveInviteResult?>
+public sealed class GetActiveInviteHandler : IRequestHandler<GetActiveInviteQuery, GetActiveInvitesListResult>
 {
     private readonly IEventRepository _events;
+    private readonly IEncryptionService _encryption;
 
-    public GetActiveInviteHandler(IEventRepository events)
+    public GetActiveInviteHandler(IEventRepository events, IEncryptionService encryption)
     {
         _events = events;
+        _encryption = encryption;
     }
 
-    public async Task<GetActiveInviteResult?> Handle(GetActiveInviteQuery query, CancellationToken ct)
+    public async Task<GetActiveInvitesListResult> Handle(GetActiveInviteQuery query, CancellationToken ct)
     {
         if (query.UserId == Guid.Empty)
             throw new InvalidOperationException("UserId is required.");
@@ -28,15 +31,39 @@ public sealed class GetActiveInviteHandler : IRequestHandler<GetActiveInviteQuer
         var ev = await _events.GetByIdWithIncludesAsync(query.EventId, ct)
             ?? throw new InvalidOperationException("Event not found.");
 
-        var activeInvite = ev.Invites.FirstOrDefault(i => i.IsActive);
-        
-        if (activeInvite == null)
-            return null;
+        var activeInvites = ev.Invites.Where(i => i.IsActive).ToList();
 
-        return new GetActiveInviteResult(
-            activeInvite.Id,
-            activeInvite.IsActive,
-            activeInvite.CreatedAtUtc
-        );
+        var results = new List<GetActiveInviteResult>();
+
+        foreach (var invite in activeInvites)
+        {
+            // Decrypt invite key
+            string? plainTextKey = null;
+            if (!string.IsNullOrEmpty(invite.EncryptedInviteKey))
+            {
+                try
+                {
+                    plainTextKey = _encryption.Decrypt(invite.EncryptedInviteKey);
+                }
+                catch
+                {
+                    // Decryption failed - old data or corrupted
+                    plainTextKey = null;
+                }
+            }
+
+            results.Add(new GetActiveInviteResult(
+                InviteId: invite.Id,
+                IsActive: invite.IsActive,
+                EventCode: ev.Code,
+                InviteKey: plainTextKey,
+                CreatedAtUtc: invite.CreatedAtUtc,
+                Message: plainTextKey != null 
+                    ? "Active invite key available" 
+                    : "Active invite key (decryption failed)"
+            ));
+        }
+
+        return new GetActiveInvitesListResult(results.AsReadOnly());
     }
 }

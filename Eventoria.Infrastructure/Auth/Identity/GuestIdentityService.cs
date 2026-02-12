@@ -1,4 +1,4 @@
-ï»¿using Eventoria.Application.Auth.Abstractions;
+using Eventoria.Application.Auth.Abstractions;
 using Eventoria.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 
@@ -15,17 +15,24 @@ public sealed class GuestIdentityService : IGuestIdentityService
 
     public async Task<Guid> CreateGuestUserAsync(string displayName, Guid? eventId, CancellationToken ct)
     {
-        // Guest iÃ§in unique username Ã¼ret
-        // email yok -> Email null
+        // DisplayName boþsa varsayýlan deðer
+        var finalDisplayName = string.IsNullOrWhiteSpace(displayName) 
+            ? "Ziyaretçi Kullanýcý" 
+            : displayName.Trim();
+
+        // Guest için unique email ve username üret
+        var guestId = Guid.NewGuid();
+        var guestEmail = $"guest_{guestId:N}@eventoria.guest";
+        
         var user = new ApplicationUser
         {
-            Id = Guid.NewGuid(),
+            Id = guestId,
             IsGuest = true,
-            DisplayName = displayName,
+            DisplayName = finalDisplayName,
             GuestEventId = eventId,
-            UserName = $"guest_{Guid.NewGuid():N}", // unique
-            Email = null,
-            EmailConfirmed = false
+            UserName = guestEmail,  // Email ile ayný
+            Email = guestEmail,     // Unique guest email
+            EmailConfirmed = false  // Guest'ler email confirm etmez
         };
 
         var result = await _users.CreateAsync(user);
@@ -44,7 +51,7 @@ public sealed class GuestIdentityService : IGuestIdentityService
 
         email = email.Trim().ToLowerInvariant();
 
-        // Email baÅŸkasÄ±nda var mÄ±?
+        // Email baþkasýnda var mý?
         var existing = await _users.FindByEmailAsync(email);
         if (existing is not null && existing.Id != user.Id)
             return (false, "Email already registered.");
@@ -69,7 +76,7 @@ public sealed class GuestIdentityService : IGuestIdentityService
         user.IsGuest = false;
         user.UpgradedAtUtc = DateTime.UtcNow;
 
-        // Email doÄŸrulama yoksa:
+        // Email doðrulama yoksa:
         user.EmailConfirmed = true;
 
         var update = await _users.UpdateAsync(user);

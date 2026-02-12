@@ -25,7 +25,7 @@ public sealed class EventInvitesController : ControllerBase
 
     /// <summary>
     /// Generate new invite key for event (Event Admin only)
-    /// Automatically deactivates previous invite keys
+    /// Creates a new invite key without deactivating previous ones
     /// </summary>
     [HttpPost("generate")]
     public async Task<ActionResult<GenerateInviteKeyResult>> GenerateInviteKey(
@@ -40,11 +40,11 @@ public sealed class EventInvitesController : ControllerBase
     }
 
     /// <summary>
-    /// Get active invite key status (Event Admin only)
-    /// Does NOT return the actual key - only metadata
+    /// Get all active invite keys (Event Admin only)
+    /// Returns all active invites with decrypted keys
     /// </summary>
     [HttpGet("active")]
-    public async Task<ActionResult<GetActiveInviteResult>> GetActiveInvite(
+    public async Task<ActionResult<GetActiveInvitesListResult>> GetActiveInvites(
         Guid eventId,
         CancellationToken ct)
     {
@@ -52,15 +52,12 @@ public sealed class EventInvitesController : ControllerBase
             new GetActiveInviteQuery(_current.UserId, eventId),
             ct);
 
-        if (result == null)
-            return NotFound(new { message = "No active invite key found." });
-
         return Ok(result);
     }
 
     /// <summary>
-    /// Deactivate current invite key (Event Admin only)
-    /// Prevents new users from joining with the old key
+    /// Deactivate specific invite key (Event Admin only)
+    /// Prevents new users from joining with the deactivated key
     /// </summary>
     [HttpPost("deactivate")]
     public async Task<ActionResult<DeactivateInviteKeyResult>> DeactivateInviteKey(

@@ -12,19 +12,22 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
     private readonly IMediaFileRepository _mediaFiles;
     private readonly IStorageProviderResolver _resolver;
     private readonly ICurrentUserService _currentUser;
+    private readonly IUserRepository _users;
 
     public GetEventPostsHandler(
         IEventRepository events,
         IPostRepository posts,
         IMediaFileRepository mediaFiles,
         IStorageProviderResolver resolver,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IUserRepository users)
     {
         _events = events;
         _posts = posts;
         _mediaFiles = mediaFiles;
         _resolver = resolver;
         _currentUser = currentUser;
+        _users = users;
     }
 
     public async Task<GetEventPostsResult> Handle(GetEventPostsQuery q, CancellationToken ct)
@@ -45,6 +48,16 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
 
         if (posts.Count == 0)
             return new GetEventPostsResult(q.EventId, q.Page, q.PageSize, new());
+
+        // Kullanýcý ID'lerini topla
+        var userIds = posts
+            .Where(p => p.CreatedByUserId.HasValue)
+            .Select(p => p.CreatedByUserId!.Value)
+            .Distinct()
+            .ToList();
+
+        // Kullanýcý displayName'lerini çek
+        var userMap = await _users.GetDisplayNamesByIdsAsync(userIds, ct);
 
         // ? Sadece cover media id'leri (her post için order en küçük olan)
         var coverIds = posts
@@ -88,9 +101,17 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
                 );
             }
 
+            // Kullanýcý displayName'ini bul
+            string? displayName = null;
+            if (p.CreatedByUserId.HasValue && userMap.TryGetValue(p.CreatedByUserId.Value, out var userName))
+            {
+                displayName = userName;
+            }
+
             items.Add(new EventPostListItemDto(
                 PostId: p.Id,
                 CreatedByUserId: p.CreatedByUserId,
+                CreatedByDisplayName: displayName,
                 Caption: p.Caption,
                 CreatedAtUtc: p.CreatedAtUtc,
                 Cover: cover

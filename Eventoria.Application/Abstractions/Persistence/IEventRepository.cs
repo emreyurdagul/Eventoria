@@ -9,6 +9,8 @@ public interface IEventRepository : IRepository<Event>
 {
     Task<Event?> GetByIdWithIncludesAsync(Guid eventId, CancellationToken ct);
 
+    Task<Event?> GetByIdWithIncludesAsNoTrackingAsync(Guid eventId, CancellationToken ct);
+
     Task<Event?> GetByCodeAsync(string code, CancellationToken ct);
     Task<bool> CodeExistsAsync(string code, CancellationToken ct);
 

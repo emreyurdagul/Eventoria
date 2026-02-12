@@ -1,4 +1,5 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Events.Queries.GetEventMediaFeed;
 using Eventoria.Domain.Entities;
 using Eventoria.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -39,4 +40,73 @@ public sealed class PostRepository : GenericRepository<Post>, IPostRepository
             .Select(pm => pm.MediaFileId)
             .Distinct()
             .ToListAsync(ct);
+
+    public async Task<GetEventMediaFeedResult> GetEventMediaFeedAsync(Guid eventId, int page, int pageSize, CancellationToken ct)
+    {
+        // Get paginated media items
+        var mediaItems = await _db.PostMedias
+            .AsNoTracking()
+            .Join(
+                _db.Posts,
+                pm => pm.PostId,
+                p => p.Id,
+                (pm, p) => new { pm, p })
+            .Join(
+                _db.MediaFiles,
+                x => x.pm.MediaFileId,
+                mf => mf.Id,
+                (x, mf) => new { x.pm, x.p, mf })
+            .Join(
+                _db.Users,
+                item => item.p.CreatedByUserId,
+                u => u.Id,
+                (item, u) => new { item.pm, item.p, item.mf, u })
+            .Where(item => item.p.EventId == eventId 
+                && item.mf.Status.ToString() == "Ready")
+            .OrderByDescending(item => item.p.CreatedAtUtc)
+            .ThenBy(item => item.pm.Order)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(item => new EventMediaFeedItemDto(
+                MediaId: item.mf.Id,
+                PostId: item.p.Id,
+                PostTitle: item.p.Caption,
+                PostAuthorId: item.p.CreatedByUserId.Value,
+                PostAuthorName: item.u.DisplayName ?? item.u.Email ?? "Unknown",
+                MediaType: item.mf.ContentType.StartsWith("image/") ? "Photo" : "Video",
+                ThumbnailUrl: null,
+                DownloadUrl: null,
+                PostedAtUtc: item.p.CreatedAtUtc,
+                LikeCount: 0,
+                CommentCount: 0
+            ))
+            .ToListAsync(ct);
+
+        // Get total count
+        var total = await _db.PostMedias
+            .AsNoTracking()
+            .Join(
+                _db.Posts,
+                pm => pm.PostId,
+                p => p.Id,
+                (pm, p) => new { pm, p })
+            .Join(
+                _db.MediaFiles,
+                x => x.pm.MediaFileId,
+                mf => mf.Id,
+                (x, mf) => new { x.pm, x.p, mf })
+            .Where(item => item.p.EventId == eventId 
+                && item.mf.Status.ToString() == "Ready")
+            .CountAsync(ct);
+
+        var hasMore = (page * pageSize) < total;
+
+        return new GetEventMediaFeedResult(
+            mediaItems,
+            page,
+            pageSize,
+            total,
+            hasMore
+        );
+    }
 }

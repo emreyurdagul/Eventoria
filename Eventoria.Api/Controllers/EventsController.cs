@@ -6,6 +6,7 @@ using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Create;
 using Eventoria.Application.Events.Join;
 using Eventoria.Application.Events.Queries.GetEventDetails;
+using Eventoria.Application.Events.Queries.GetEventMediaFeed;
 using Eventoria.Application.Events.Queries.GetMyEventMembers;
 using Eventoria.Application.Events.Queries.GetMyEvents;
 using Eventoria.Application.Events.Queries.Models;
@@ -83,6 +84,20 @@ public sealed class EventsController : ControllerBase
         CancellationToken ct = default)
     {
         var res = await _mediator.Send(new GetEventPostsQuery(_current.UserId, eventId, page, pageSize), ct);
+        return Ok(res);
+    }
+
+    [HttpGet("{eventId:guid}/media-feed")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<ActionResult<GetEventMediaFeedResult>> GetMediaFeed(
+        Guid eventId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var res = await _mediator.Send(
+            new GetEventMediaFeedQuery(eventId, _current.UserId, page, pageSize),
+            ct);
         return Ok(res);
     }
 

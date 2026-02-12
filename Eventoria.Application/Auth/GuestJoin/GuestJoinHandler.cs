@@ -36,7 +36,7 @@ public sealed class GuestJoinHandler : IRequestHandler<GuestJoinCommand, GuestAu
     {
         if (string.IsNullOrWhiteSpace(cmd.EventCode)) throw new InvalidOperationException("EventCode is required.");
         if (string.IsNullOrWhiteSpace(cmd.InviteKey)) throw new InvalidOperationException("InviteKey is required.");
-        if (string.IsNullOrWhiteSpace(cmd.DisplayName)) throw new InvalidOperationException("DisplayName is required.");
+        // DisplayName artýk opsiyonel - service içinde default deðer verilecek
 
         return await _uow.ExecuteInTransactionAsync(async innerCt =>
         {
@@ -58,8 +58,8 @@ public sealed class GuestJoinHandler : IRequestHandler<GuestJoinCommand, GuestAu
             if (matchingInvite == null)
                 throw new UnauthorizedAccessException("Invalid or inactive invite key.");
 
-            // Guest user yarat
-            var guestUserId = await _guestIdentity.CreateGuestUserAsync(cmd.DisplayName.Trim(), ev.Id, innerCt);
+            // Guest user yarat (DisplayName null olabilir, service içinde default deðer verilir)
+            var guestUserId = await _guestIdentity.CreateGuestUserAsync(cmd.DisplayName, ev.Id, innerCt);
 
             // Membership ekle (participant)
             ev.AddMembership(guestUserId, EventRole.Participant);
@@ -76,7 +76,7 @@ public sealed class GuestJoinHandler : IRequestHandler<GuestJoinCommand, GuestAu
                 RefreshToken: refresh,
                 IsGuest: true,
                 EventId: ev.Id,
-                DisplayName: cmd.DisplayName.Trim());
+                DisplayName: cmd.DisplayName ?? "Ziyaretçi Kullanýcý");
         }, ct);
     }
 
