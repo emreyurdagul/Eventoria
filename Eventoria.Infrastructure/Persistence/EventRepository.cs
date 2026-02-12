@@ -114,6 +114,37 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<MyEventItem>> GetAllEventsPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken ct)
+    {
+        var skip = (page - 1) * pageSize;
+
+        return await _db.Events
+            .AsNoTracking()
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(e => new MyEventItem(
+                EventId: e.Id,
+                Code: e.Code,
+                Title: e.Title,
+                Date: e.Date,
+                Status: e.Status,
+                MyRole: EventRole.Admin, // SuperAdmin için tüm etkinliklerde Admin rolü varsayýlýr
+                ParticipantLimit: e.Specs.ParticipantLimit,
+                MemberCount: _db.EventMemberships.Count(x => x.EventId == e.Id)
+            ))
+            .ToListAsync(ct);
+    }
+
+    public Task<int> CountMyEventsAsync(Guid userId, CancellationToken ct)
+        => _db.EventMemberships.CountAsync(m => m.UserId == userId, ct);
+
+    public Task<int> CountAllEventsAsync(CancellationToken ct)
+        => _db.Events.CountAsync(ct);
+
     public async Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct)
     {
         var row = await _db.EventMemberships
@@ -144,6 +175,30 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 role == Domain.Enums.EventRole.Admin
                     ? _db.Set<Domain.Entities.EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
                     : false
+            ))
+            .FirstOrDefaultAsync(ct);
+
+        return dto;
+    }
+
+    public async Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct)
+    {
+        var dto = await _db.Events
+            .Where(e => e.Id == eventId)
+            .Select(e => new EventDetailsDto(
+                e.Id,
+                e.Code,
+                e.Title,
+                e.Description,
+                e.Date,
+                e.Status,
+                e.CreatedByUserId,
+                EventRole.Admin, // SuperAdmin için Admin rolü
+                e.Specs.ParticipantLimit,
+                e.Specs.PhotosPerUserLimit,
+                e.Specs.VideosPerUserLimit,
+                _db.EventMemberships.Count(m => m.EventId == e.Id),
+                _db.Set<Domain.Entities.EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
             ))
             .FirstOrDefaultAsync(ct);
 

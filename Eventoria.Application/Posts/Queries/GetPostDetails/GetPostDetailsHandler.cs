@@ -1,4 +1,5 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Auth;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Storage;
 using MediatR;
 
@@ -10,17 +11,20 @@ public sealed class GetPostDetailsHandler : IRequestHandler<GetPostDetailsQuery,
     private readonly IEventRepository _events;
     private readonly IMediaFileRepository _mediaFiles;
     private readonly IStorageProviderResolver _resolver;
+    private readonly ICurrentUserService _currentUser;
 
     public GetPostDetailsHandler(
         IPostRepository posts,
         IEventRepository events,
         IMediaFileRepository mediaFiles,
-        IStorageProviderResolver resolver)
+        IStorageProviderResolver resolver,
+        ICurrentUserService currentUser)
     {
         _posts = posts;
         _events = events;
         _mediaFiles = mediaFiles;
         _resolver = resolver;
+        _currentUser = currentUser;
     }
 
     public async Task<GetPostDetailsResult> Handle(GetPostDetailsQuery q, CancellationToken ct)
@@ -31,9 +35,12 @@ public sealed class GetPostDetailsHandler : IRequestHandler<GetPostDetailsQuery,
         var post = await _posts.GetByIdWithMediaAsync(q.PostId, ct)
             ?? throw new InvalidOperationException("Post not found.");
 
-        // ✅ event member check (detay için de şart)
-        var isMember = await _events.IsMemberAsync(post.EventId, q.UserId, ct);
-        if (!isMember) throw new UnauthorizedAccessException("Not allowed.");
+        // SuperAdmin kontrol� bypass
+        if (!_currentUser.IsSuperAdmin)
+        {
+            var isMember = await _events.IsMemberAsync(post.EventId, q.UserId, ct);
+            if (!isMember) throw new UnauthorizedAccessException("Not allowed.");
+        }
 
         var mediaIds = post.Media.Select(m => m.MediaFileId).Distinct().ToList();
         var files = mediaIds.Count == 0

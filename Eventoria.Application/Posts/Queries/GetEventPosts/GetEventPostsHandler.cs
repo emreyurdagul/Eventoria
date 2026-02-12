@@ -1,4 +1,5 @@
-ï»¿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Auth;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Storage;
 using MediatR;
 
@@ -10,17 +11,20 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
     private readonly IPostRepository _posts;
     private readonly IMediaFileRepository _mediaFiles;
     private readonly IStorageProviderResolver _resolver;
+    private readonly ICurrentUserService _currentUser;
 
     public GetEventPostsHandler(
         IEventRepository events,
         IPostRepository posts,
         IMediaFileRepository mediaFiles,
-        IStorageProviderResolver resolver)
+        IStorageProviderResolver resolver,
+        ICurrentUserService currentUser)
     {
         _events = events;
         _posts = posts;
         _mediaFiles = mediaFiles;
         _resolver = resolver;
+        _currentUser = currentUser;
     }
 
     public async Task<GetEventPostsResult> Handle(GetEventPostsQuery q, CancellationToken ct)
@@ -30,15 +34,19 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
         if (q.Page <= 0) throw new InvalidOperationException("Page must be >= 1.");
         if (q.PageSize <= 0 || q.PageSize > 100) throw new InvalidOperationException("PageSize must be 1..100.");
 
-        var isMember = await _events.IsMemberAsync(q.EventId, q.UserId, ct);
-        if (!isMember) throw new UnauthorizedAccessException("Not allowed.");
+        // SuperAdmin kontrolü bypass
+        if (!_currentUser.IsSuperAdmin)
+        {
+            var isMember = await _events.IsMemberAsync(q.EventId, q.UserId, ct);
+            if (!isMember) throw new UnauthorizedAccessException("Not allowed.");
+        }
 
         var posts = await _posts.GetByEventIdPagedAsync(q.EventId, q.Page, q.PageSize, ct);
 
         if (posts.Count == 0)
             return new GetEventPostsResult(q.EventId, q.Page, q.PageSize, new());
 
-        // âœ… Sadece cover media id'leri (her post iÃ§in order en kÃ¼Ã§Ã¼k olan)
+        // ? Sadece cover media id'leri (her post için order en küçük olan)
         var coverIds = posts
             .Select(p => p.Media.OrderBy(m => m.Order).FirstOrDefault())
             .Where(pm => pm != null)

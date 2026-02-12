@@ -20,12 +20,21 @@ public interface IEventRepository : IRepository<Event>
         int pageSize,
         CancellationToken ct);
 
+    Task<IReadOnlyList<MyEventItem>> GetAllEventsPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken ct);
+
+    Task<int> CountMyEventsAsync(Guid userId, CancellationToken ct);
+    Task<int> CountAllEventsAsync(CancellationToken ct);
+    
     Task<int> CountCreatedByAsync(Guid? adminUserId, CancellationToken ct);
     Task<int> SumParticipantLimitsCreatedByAsync(Guid? adminUserId, CancellationToken ct);
     Task<int> SumParticipantLimitsCreatedByExcludingEventAsync(Guid creatorUserId, Guid excludeEventId, CancellationToken ct);
     Task<bool> IsMemberAsync(Guid eventId, Guid userId, CancellationToken ct);
     Task<IReadOnlyList<MyEventItem>> GetMyEventsAsync(Guid userId, CancellationToken ct);
     Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct);
+    Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct);
     
     Task<PagedResult<EventMemberDto>> GetEventMembersAsync(Guid eventId, int page, int pageSize, CancellationToken ct);
     

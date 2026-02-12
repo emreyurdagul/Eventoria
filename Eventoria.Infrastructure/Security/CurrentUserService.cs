@@ -1,4 +1,4 @@
-﻿using Eventoria.Application.Abstractions;
+using Eventoria.Application.Abstractions;
 using Eventoria.Application.Abstractions.Auth;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
@@ -35,4 +35,15 @@ public sealed class CurrentUserService : ICurrentUserService
 
     public Guid UserId =>
         UserIdOrNull ?? throw new UnauthorizedAccessException("User is not authenticated.");
+
+    public bool IsSuperAdmin
+    {
+        get
+        {
+            var principal = _http.HttpContext?.User;
+            if (principal == null) return false;
+
+            return principal.IsInRole(SystemRoles.SuperUser);
+        }
+    }
 }
