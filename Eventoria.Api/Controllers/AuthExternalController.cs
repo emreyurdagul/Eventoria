@@ -2,6 +2,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -21,39 +22,40 @@ public sealed class AuthExternalController : ControllerBase
     }
 
     // 1) Google login başlat
-    // Frontend: window.location = /api/auth/external/google?returnUrl=/somepage
+    // Frontend örnek:
+    // window.location = "https://api.etkinlikgalerim.online/api/auth/external/google?returnUrl=/somepage"
     [HttpGet("google")]
     [AllowAnonymous]
     public IActionResult Google([FromQuery] string? returnUrl = null)
     {
-        // Callback'e geri dönünce buraya düşecek
-        var callbackUrl = Url.ActionLink(
-            action: nameof(GoogleCallback),
-            controller: "AuthExternal",
-            values: new { returnUrl });
+        // Google login tamamlanınca uygulama içinde buraya döneceğiz (senin action)
+        var appCallback = Url.Action(nameof(GoogleCallback), "AuthExternal");
+        if (string.IsNullOrWhiteSpace(appCallback))
+            throw new InvalidOperationException("Could not build GoogleCallback url.");
 
         var props = new AuthenticationProperties
         {
-            RedirectUri = callbackUrl
+            RedirectUri = appCallback
         };
+
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+            props.Items["returnUrl"] = returnUrl;
 
         return Challenge(props, "Google");
     }
 
+
     // 2) Google callback
-    // Default davranış: frontend'e redirect (tokenları hash ile geçiyoruz)
-    // İstersen ?mode=json ile JSON döndürür
+    // Google Console Redirect URI:
+    // https://api.etkinlikgalerim.online/api/auth/external/google/callback
     [HttpGet("google/callback")]
     [AllowAnonymous]
-    public async Task<IActionResult> GoogleCallback(
-        [FromQuery] string? returnUrl = null,
-        [FromQuery] string? mode = null,
-        CancellationToken ct = default)
+    public async Task<IActionResult> GoogleCallback([FromQuery] string? mode = null, CancellationToken ct = default)
     {
-        // Google principal genellikle External cookie scheme’de olur:
-        var authResult = await HttpContext.AuthenticateAsync("External");
-        if (!authResult.Succeeded || authResult.Principal == null)
-            return Unauthorized();
+        // ✅ Identity’nin external cookie scheme’i
+        var authResult = await HttpContext.AuthenticateAsync(IdentityConstants.ExternalScheme);
+        if (!authResult.Succeeded || authResult.Principal is null)
+            return Redirect(GetErrorRedirect());
 
         var principal = authResult.Principal;
 
@@ -69,31 +71,56 @@ public sealed class AuthExternalController : ControllerBase
         var lastName = principal.FindFirstValue(ClaimTypes.Surname);
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(providerKey))
-            return Unauthorized();
+        {
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Redirect(GetErrorRedirect());
+        }
+
+        // returnUrl’i state içinden geri al
+        string? returnUrl = null;
+
+        if (authResult.Properties?.Items != null &&
+            authResult.Properties.Items.TryGetValue("returnUrl", out var tmp))
+        {
+            returnUrl = tmp;
+        }
+
+        var safeReturn = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
+
 
         var tokens = await _mediator.Send(
-            new GoogleLoginCommand(providerKey, email, firstName, lastName),
+            new GoogleLoginCommand(providerKey, email.Trim().ToLowerInvariant(), firstName, lastName),
             ct);
 
         // external cookie temizle
-        await HttpContext.SignOutAsync("External");
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-        // JSON isteyenler için (debug / mobile / postman)
+        // Debug / mobile / postman
         if (string.Equals(mode, "json", StringComparison.OrdinalIgnoreCase))
             return Ok(tokens);
 
-        // Default: frontend’e redirect
-        var baseUrl = _config["Frontend:BaseUrl"] ?? "http://localhost:5173";
-        var safeReturn = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl;
-
-        // Tokenları query yerine hash ile göndermek daha iyi (server loglarında görünmez)
-        // http://frontend/#/auth/callback?access=...&refresh=...&returnUrl=...
-        var redirectUrl =
-            $"{baseUrl}#/auth/callback" +
-            $"?accessToken={Uri.EscapeDataString(tokens.AccessToken)}" +
+        // ✅ Frontend success sayfasına yönlendir
+        // Tokenları fragment (#) içinde taşımak, query’ye göre daha az loglanır.
+        // Örn: https://etkinlikgalerim.online/auth/oauth-success#accessToken=...&refreshToken=...&returnUrl=...
+        var successBase = GetSuccessRedirect();
+        var fragment =
+            $"accessToken={Uri.EscapeDataString(tokens.AccessToken)}" +
             $"&refreshToken={Uri.EscapeDataString(tokens.RefreshToken)}" +
             $"&returnUrl={Uri.EscapeDataString(safeReturn)}";
 
+        // successBase zaten içinde # varsa (nadiren), ona göre birleştir
+        var redirectUrl = successBase.Contains('#')
+            ? $"{successBase}&{fragment}"
+            : $"{successBase}#{fragment}";
+
         return Redirect(redirectUrl);
     }
+
+    private string GetSuccessRedirect()
+        => _config["Frontend:OAuthSuccessRedirect"]
+           ?? "http://localhost:5173/auth/oauth-success";
+
+    private string GetErrorRedirect()
+        => _config["Frontend:OAuthErrorRedirect"]
+           ?? "http://localhost:5173/auth/oauth-error";
 }

@@ -90,18 +90,24 @@ public static class DependencyInjection
         {
             opt.Cookie.Name = "eventoria.external";
             opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            opt.Cookie.SameSite = SameSiteMode.None;
+            opt.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            opt.Cookie.HttpOnly = true;
         })
         .AddGoogle("Google", opt =>
         {
-            opt.ClientId = config["Authentication:Google:ClientId"]
-                ?? throw new InvalidOperationException("Google ClientId missing");
-            opt.ClientSecret = config["Authentication:Google:ClientSecret"]
-                ?? throw new InvalidOperationException("Google ClientSecret missing");
+            opt.ClientId = config["Authentication:Google:ClientId"]!;
+            opt.ClientSecret = config["Authentication:Google:ClientSecret"]!;
 
-            opt.SignInScheme = "External";
-            opt.CallbackPath = "/api/auth/external/google/callback";
+            opt.SignInScheme = IdentityConstants.ExternalScheme;
+            opt.CallbackPath = "/signin-google";
+
             opt.Scope.Add("email");
             opt.Scope.Add("profile");
+
+            opt.CorrelationCookie.SameSite = SameSiteMode.None;
+            opt.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+
         });
         // MediatR
         services.AddMediatR(cfg =>
