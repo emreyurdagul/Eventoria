@@ -116,6 +116,19 @@ public sealed class AuthExternalController : ControllerBase
         return Redirect(redirectUrl);
     }
 
+    [HttpGet("debug/config")]
+    [AllowAnonymous]
+    public IActionResult DebugConfig([FromServices] IWebHostEnvironment env)
+    {
+        return Ok(new
+        {
+            env = env.EnvironmentName,
+            success = _config["Frontend:OAuthSuccessRedirect"],
+            error = _config["Frontend:OAuthErrorRedirect"]
+        });
+    }
+
+
     private string GetSuccessRedirect()
         => _config["Frontend:OAuthSuccessRedirect"]
            ?? "http://localhost:5173/auth/oauth-success";
@@ -123,4 +136,5 @@ public sealed class AuthExternalController : ControllerBase
     private string GetErrorRedirect()
         => _config["Frontend:OAuthErrorRedirect"]
            ?? "http://localhost:5173/auth/oauth-error";
+
 }
