@@ -1,4 +1,4 @@
-﻿using Eventoria.Domain.Enums;
+using Eventoria.Domain.Enums;
 
 namespace Eventoria.Application.Events.Queries.Models;
 
@@ -10,10 +10,11 @@ public sealed record EventDetailsDto(
     DateOnly? Date,
     EventStatus Status,
     Guid? CreatedByUserId,
+    EventCoverDto? CoverPhoto,
     EventRole MyRole,
     int ParticipantLimit,
     int PhotosPerUserLimit,
     int VideosPerUserLimit,
     int MemberCount,
-    bool HasActiveInvite // sadece admin için true/false meaningful
+    bool HasActiveInvite
 );

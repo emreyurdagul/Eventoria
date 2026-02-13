@@ -32,6 +32,8 @@ public class Event : AggregateRoot
 
     public Guid CreatedByUserId { get; private set; }
 
+    public Guid? CoverPhotoMediaFileId { get; private set; }
+
     public EventSpecs Specs { get; private set; } = default!;
 
     public IReadOnlyCollection<EventMembership> Memberships => _memberships;
@@ -76,4 +78,9 @@ public class Event : AggregateRoot
         SetUpdated();
     }
 
+    public void SetCoverPhoto(Guid? mediaFileId)
+    {
+        CoverPhotoMediaFileId = mediaFileId;
+        SetUpdated();
+    }
 }

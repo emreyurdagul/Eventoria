@@ -1,4 +1,4 @@
-﻿using Eventoria.Domain.Enums;
+using Eventoria.Domain.Enums;
 
 namespace Eventoria.Application.Events.Queries.Models;
 
@@ -10,5 +10,6 @@ public sealed record MyEventItem(
     EventStatus Status,
     EventRole MyRole,
     int ParticipantLimit,
-    int MemberCount
+    int MemberCount,
+    Guid? CoverPhotoMediaFileId
 );

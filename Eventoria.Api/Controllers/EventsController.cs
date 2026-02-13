@@ -11,6 +11,7 @@ using Eventoria.Application.Events.Queries.GetMyEventMembers;
 using Eventoria.Application.Events.Queries.GetMyEvents;
 using Eventoria.Application.Events.Queries.Models;
 using Eventoria.Application.Events.Update;
+using Eventoria.Application.Events.UpdateCover;
 using Eventoria.Application.Posts.Queries.GetEventPosts;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -64,6 +65,14 @@ public sealed class EventsController : ControllerBase
             body.VideosPerUserLimit
         );
 
+        return Ok(await _mediator.Send(cmd, ct));
+    }
+
+    [HttpPut("{eventId:guid}/cover")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<ActionResult<UpdateEventCoverResult>> UpdateCover(Guid eventId, [FromBody] UpdateEventCoverRequestBody body, CancellationToken ct)
+    {
+        var cmd = new UpdateEventCoverCommand(_current.UserId, eventId, body.CoverPhotoMediaFileId);
         return Ok(await _mediator.Send(cmd, ct));
     }
 

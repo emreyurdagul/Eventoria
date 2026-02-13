@@ -1,4 +1,4 @@
-using Eventoria.Application.Abstractions.Persistence;
+﻿using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Admin.Events.Models;
 using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Queries.Models;
@@ -18,24 +18,24 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
         _db = db;
     }
 
-    public async Task<Event?> GetByIdWithIncludesAsync(Guid eventId, CancellationToken ct)
-    => await _db.Events
-        .Include(e => e.Invites)
-        .Include(e => e.Memberships)
-        .FirstOrDefaultAsync(e => e.Id == eventId, ct);
+    public Task<Event?> GetByIdWithIncludesAsync(Guid eventId, CancellationToken ct)
+        => _db.Events
+            .Include(e => e.Invites)
+            .Include(e => e.Memberships)
+            .FirstOrDefaultAsync(e => e.Id == eventId, ct);
 
-    public async Task<Event?> GetByIdWithIncludesAsNoTrackingAsync(Guid eventId, CancellationToken ct)
-    => await _db.Events
-        .AsNoTracking()
-        .Include(e => e.Invites)
-        .Include(e => e.Memberships)
-        .FirstOrDefaultAsync(e => e.Id == eventId, ct);
+    public Task<Event?> GetByIdWithIncludesAsNoTrackingAsync(Guid eventId, CancellationToken ct)
+        => _db.Events
+            .AsNoTracking()
+            .Include(e => e.Invites)
+            .Include(e => e.Memberships)
+            .FirstOrDefaultAsync(e => e.Id == eventId, ct);
 
     public Task<bool> CodeExistsAsync(string code, CancellationToken ct)
         => _db.Events.AnyAsync(e => e.Code == code, ct);
 
-    public async Task<Event?> GetByCodeAsync(string code, CancellationToken ct)
-        => await _db.Events
+    public Task<Event?> GetByCodeAsync(string code, CancellationToken ct)
+        => _db.Events
             .Include(e => e.Invites)
             .Include(e => e.Memberships)
             .FirstOrDefaultAsync(e => e.Code == code, ct);
@@ -47,16 +47,17 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
             m.Role == EventRole.Admin, ct);
 
     public Task<int> CountCreatedByAsync(Guid? adminUserId, CancellationToken ct)
-    => _db.Events.CountAsync(e => e.CreatedByUserId == adminUserId, ct);
+        => _db.Events.CountAsync(e => e.CreatedByUserId == adminUserId, ct);
 
-    public async Task<int> SumParticipantLimitsCreatedByAsync(Guid? adminUserId, CancellationToken ct)
-    {
-        return await _db.Events
+    public Task<int> SumParticipantLimitsCreatedByAsync(Guid? adminUserId, CancellationToken ct)
+        => _db.Events
             .Where(e => e.CreatedByUserId == adminUserId)
             .SumAsync(e => e.Specs.ParticipantLimit, ct);
-    }
 
-    public async Task<int> SumParticipantLimitsCreatedByExcludingEventAsync(Guid creatorUserId, Guid excludeEventId, CancellationToken ct)
+    public async Task<int> SumParticipantLimitsCreatedByExcludingEventAsync(
+        Guid creatorUserId,
+        Guid excludeEventId,
+        CancellationToken ct)
     {
         var sum = await _db.Events
             .Where(e => e.CreatedByUserId == creatorUserId && e.Id != excludeEventId)
@@ -66,27 +67,29 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     }
 
     public Task<bool> IsMemberAsync(Guid eventId, Guid userId, CancellationToken ct)
-    => _db.EventMemberships.AnyAsync(m => m.EventId == eventId && m.UserId == userId, ct);
+        => _db.EventMemberships.AnyAsync(m => m.EventId == eventId && m.UserId == userId, ct);
 
     public async Task<IReadOnlyList<MyEventItem>> GetMyEventsAsync(Guid userId, CancellationToken ct)
     {
         var list = await _db.EventMemberships
+            .AsNoTracking()
             .Where(m => m.UserId == userId)
             .Join(
-                _db.Events,
+                _db.Events.AsNoTracking(),
                 m => m.EventId,
                 e => e.Id,
                 (m, e) => new { m, e }
             )
             .Select(x => new MyEventItem(
-                x.e.Id,
-                x.e.Code,
-                x.e.Title,
-                x.e.Date,
-                x.e.Status,
-                x.m.Role,
-                x.e.Specs.ParticipantLimit,
-                _db.EventMemberships.Count(mm => mm.EventId == x.e.Id)
+                EventId: x.e.Id,
+                Code: x.e.Code,
+                Title: x.e.Title,
+                Date: x.e.Date,
+                Status: x.e.Status,
+                MyRole: x.m.Role,
+                ParticipantLimit: x.e.Specs.ParticipantLimit,
+                MemberCount: _db.EventMemberships.Count(mm => mm.EventId == x.e.Id),
+                CoverPhotoMediaFileId: x.e.CoverPhotoMediaFileId   // ✅ BURASI Event’ten
             ))
             .OrderByDescending(x => x.Date)
             .ToListAsync(ct);
@@ -95,14 +98,14 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     }
 
     public async Task<IReadOnlyList<MyEventItem>> GetMyEventsPagedAsync(
-       Guid userId,
-       int page,
-       int pageSize,
-       CancellationToken ct)
+        Guid userId,
+        int page,
+        int pageSize,
+        CancellationToken ct)
     {
         var skip = (page - 1) * pageSize;
 
-        return await _db.EventMemberships
+        var list = await _db.EventMemberships
             .AsNoTracking()
             .Where(m => m.UserId == userId)
             .OrderByDescending(m => m.Event.CreatedAtUtc)
@@ -116,9 +119,12 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 Status: m.Event.Status,
                 MyRole: m.Role,
                 ParticipantLimit: m.Event.Specs.ParticipantLimit,
-                MemberCount: _db.EventMemberships.Count(x => x.EventId == m.EventId)
+                MemberCount: _db.EventMemberships.Count(x => x.EventId == m.EventId),
+                CoverPhotoMediaFileId: m.Event.CoverPhotoMediaFileId
             ))
             .ToListAsync(ct);
+
+        return list;
     }
 
     public async Task<IReadOnlyList<MyEventItem>> GetAllEventsPagedAsync(
@@ -128,7 +134,7 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     {
         var skip = (page - 1) * pageSize;
 
-        return await _db.Events
+        var list = await _db.Events
             .AsNoTracking()
             .OrderByDescending(e => e.CreatedAtUtc)
             .Skip(skip)
@@ -141,10 +147,14 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 Status: e.Status,
                 MyRole: EventRole.Admin,
                 ParticipantLimit: e.Specs.ParticipantLimit,
-                MemberCount: _db.EventMemberships.Count(x => x.EventId == e.Id)
+                MemberCount: _db.EventMemberships.Count(x => x.EventId == e.Id),
+                CoverPhotoMediaFileId: e.CoverPhotoMediaFileId
             ))
             .ToListAsync(ct);
+
+        return list;
     }
+
 
     public Task<int> CountMyEventsAsync(Guid userId, CancellationToken ct)
         => _db.EventMemberships.CountAsync(m => m.UserId == userId, ct);
@@ -154,17 +164,20 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
     public async Task<EventDetailsDto?> GetEventDetailsAsync(Guid eventId, Guid userId, CancellationToken ct)
     {
-        var row = await _db.EventMemberships
+        var roleRow = await _db.EventMemberships
+            .AsNoTracking()
             .Where(m => m.EventId == eventId && m.UserId == userId)
             .Select(m => new { m.Role })
             .FirstOrDefaultAsync(ct);
 
-        if (row == null)
+        if (roleRow is null)
             return null;
 
-        var role = row.Role;
+        var role = roleRow.Role;
 
-        var dto = await _db.Events
+        // Not: ctor'da "cover" isimli parametre yok => named arg KULLANMIYORUZ
+        return await _db.Events
+            .AsNoTracking()
             .Where(e => e.Id == eventId)
             .Select(e => new EventDetailsDto(
                 e.Id,
@@ -174,23 +187,24 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 e.Date,
                 e.Status,
                 e.CreatedByUserId,
+                /* EventCoverDto? */ null, // ✅ cover parametresi, ismi ne olursa olsun sırayla
                 role,
                 e.Specs.ParticipantLimit,
                 e.Specs.PhotosPerUserLimit,
                 e.Specs.VideosPerUserLimit,
                 _db.EventMemberships.Count(m => m.EventId == e.Id),
-                role == Domain.Enums.EventRole.Admin
-                    ? _db.Set<Domain.Entities.EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
+                role == EventRole.Admin
+                    ? _db.Set<EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
                     : false
             ))
             .FirstOrDefaultAsync(ct);
-
-        return dto;
     }
 
-    public async Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct)
+    public Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct)
     {
-        var dto = await _db.Events
+        // Not: ctor'da "cover" isimli parametre yok => named arg KULLANMIYORUZ
+        return _db.Events
+            .AsNoTracking()
             .Where(e => e.Id == eventId)
             .Select(e => new EventDetailsDto(
                 e.Id,
@@ -200,19 +214,22 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 e.Date,
                 e.Status,
                 e.CreatedByUserId,
+                /* EventCoverDto? */ null, // ✅ cover parametresi
                 EventRole.Admin,
                 e.Specs.ParticipantLimit,
                 e.Specs.PhotosPerUserLimit,
                 e.Specs.VideosPerUserLimit,
                 _db.EventMemberships.Count(m => m.EventId == e.Id),
-                _db.Set<Domain.Entities.EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
+                _db.Set<EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
             ))
             .FirstOrDefaultAsync(ct);
-
-        return dto;
     }
 
-    public async Task<PagedResult<EventMemberDto>> GetEventMembersAsync(Guid eventId, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<EventMemberDto>> GetEventMembersAsync(
+        Guid eventId,
+        int page,
+        int pageSize,
+        CancellationToken ct)
     {
         var query = _db.EventMemberships
             .AsNoTracking()
@@ -225,7 +242,7 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Join(
-                _db.Users,
+                _db.Users.AsNoTracking(),
                 m => m.UserId,
                 u => u.Id,
                 (m, u) => new EventMemberDto(
@@ -244,6 +261,7 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     public async Task DeactivateActiveInvitesAsync(Guid eventId, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+
         await _db.EventInvites
             .Where(i => i.EventId == eventId && i.IsActive)
             .ExecuteUpdateAsync(setters => setters

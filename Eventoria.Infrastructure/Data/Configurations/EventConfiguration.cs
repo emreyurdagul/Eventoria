@@ -1,4 +1,4 @@
-﻿using Eventoria.Domain.Entities;
+using Eventoria.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -27,9 +27,10 @@ public class EventConfiguration : IEntityTypeConfiguration<Event>
 
         builder.Property(x => x.CreatedByUserId).IsRequired();
 
+        builder.Property(x => x.CoverPhotoMediaFileId);
 
 
-        // ✅ Owned: EventSpecs -> events tablosuna kolon
+        // ? Owned: EventSpecs -> events tablosuna kolon
         builder.OwnsOne(x => x.Specs, specs =>
         {
             specs.Property(p => p.ParticipantLimit)
