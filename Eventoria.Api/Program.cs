@@ -1,4 +1,4 @@
-using Eventoria.Api;
+﻿using Eventoria.Api;
 using Eventoria.Application;
 using Eventoria.Infrastructure;
 using Eventoria.Infrastructure.Data;
@@ -7,8 +7,22 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
+
+// Forwarded headers options (Nginx / reverse proxy için)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+
+    // Reverse proxy arkasında forwarded header'ların yoksayılmaması için
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services
     .AddApi(builder.Configuration)
@@ -27,29 +41,28 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// ✅ ForwardedHeaders, Authentication’dan ÖNCE
+app.UseForwardedHeaders();
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
     var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
     if (pendingMigrations.Any())
-    {
         await db.Database.MigrateAsync();
-    }
 }
-
 
 await SuperUserSeeder.SeedAsync(app.Services);
 await RoleSeeder.SeedAsync(app.Services);
-
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Eventoria.Api v1");
 });
-app.UseCors("AllowAll");
 
+app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
