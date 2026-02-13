@@ -37,7 +37,6 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
         if (q.Page <= 0) throw new InvalidOperationException("Page must be >= 1.");
         if (q.PageSize <= 0 || q.PageSize > 100) throw new InvalidOperationException("PageSize must be 1..100.");
 
-        // SuperAdmin kontrolü bypass
         if (!_currentUser.IsSuperAdmin)
         {
             var isMember = await _events.IsMemberAsync(q.EventId, q.UserId, ct);
@@ -49,39 +48,58 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
         if (posts.Count == 0)
             return new GetEventPostsResult(q.EventId, q.Page, q.PageSize, new());
 
-        // Kullanýcý ID'lerini topla
         var userIds = posts
             .Where(p => p.CreatedByUserId.HasValue)
             .Select(p => p.CreatedByUserId!.Value)
             .Distinct()
             .ToList();
 
-        // Kullanýcý displayName'lerini çek
         var userMap = await _users.GetDisplayNamesByIdsAsync(userIds, ct);
 
-        // ? Sadece cover media id'leri (her post için order en küçük olan)
-        var coverIds = posts
-            .Select(p => p.Media.OrderBy(m => m.Order).FirstOrDefault())
-            .Where(pm => pm != null)
-            .Select(pm => pm!.MediaFileId)
-            .Distinct()
-            .ToList();
+        // Collect ALL media file IDs (cover + all media in posts)
+        var allMediaIds = new HashSet<Guid>();
+        foreach (var p in posts)
+        {
+            foreach (var pm in p.Media)
+            {
+                allMediaIds.Add(pm.MediaFileId);
+            }
+        }
 
-        var files = coverIds.Count == 0
+        var files = allMediaIds.Count == 0
             ? new List<Eventoria.Domain.Entities.MediaFile>()
-            : await _mediaFiles.GetByIdsAsync(coverIds, ct);
+            : await _mediaFiles.GetByIdsAsync(allMediaIds.ToList(), ct);
 
         var fileMap = files.ToDictionary(x => x.Id, x => x);
 
-        var ttl = TimeSpan.FromMinutes(15);
+        // IMPORTANT: Collect all thumbnail IDs - these should NOT appear in post media lists
+        var thumbnailIds = files
+            .Where(f => f.ThumbnailMediaFileId.HasValue)
+            .Select(f => f.ThumbnailMediaFileId.Value)
+            .ToHashSet();
 
+        // Also load thumbnail files for URL generation
+        var thumbnailFiles = thumbnailIds.Count == 0
+            ? new List<Eventoria.Domain.Entities.MediaFile>()
+            : await _mediaFiles.GetByIdsAsync(thumbnailIds.ToList(), ct);
+
+        var thumbnailMap = thumbnailFiles.ToDictionary(x => x.Id, x => x);
+
+        var ttl = TimeSpan.FromMinutes(15);
         var items = new List<EventPostListItemDto>(posts.Count);
 
         foreach (var p in posts)
         {
+            // Filter media: Exclude thumbnails (they are not part of the post)
+            var postMedia = p.Media
+                .Where(pm => !thumbnailIds.Contains(pm.MediaFileId))
+                .OrderBy(pm => pm.Order)
+                .ToList();
+
             EventPostCoverDto? cover = null;
 
-            var coverPm = p.Media.OrderBy(m => m.Order).FirstOrDefault();
+            // Get cover: first non-thumbnail media
+            var coverPm = postMedia.FirstOrDefault();
             if (coverPm != null && fileMap.TryGetValue(coverPm.MediaFileId, out var mf))
             {
                 var storage = _resolver.Resolve(mf.ProviderKey);
@@ -92,16 +110,34 @@ public sealed class GetEventPostsHandler : IRequestHandler<GetEventPostsQuery, G
                     validFor: ttl,
                     ct);
 
+                string? thumbnailUrl = null;
+                Guid? thumbnailMediaFileId = null;
+
+                // For videos: get thumbnail URL if exists
+                if (mf.ThumbnailMediaFileId.HasValue 
+                    && thumbnailMap.TryGetValue(mf.ThumbnailMediaFileId.Value, out var thumbnailMf))
+                {
+                    var thumbnailStorage = _resolver.Resolve(thumbnailMf.ProviderKey);
+                    thumbnailUrl = await thumbnailStorage.GetDownloadUrlAsync(
+                        thumbnailMf.BucketOrContainer,
+                        thumbnailMf.ObjectKey,
+                        validFor: ttl,
+                        ct);
+
+                    thumbnailMediaFileId = thumbnailMf.Id;
+                }
+
                 cover = new EventPostCoverDto(
                     MediaFileId: mf.Id,
                     Order: coverPm.Order,
                     Url: url,
                     ContentType: mf.ContentType,
-                    SizeBytes: mf.SizeBytes
+                    SizeBytes: mf.SizeBytes,
+                    ThumbnailUrl: thumbnailUrl,
+                    ThumbnailMediaFileId: thumbnailMediaFileId
                 );
             }
 
-            // Kullanýcý displayName'ini bul
             string? displayName = null;
             if (p.CreatedByUserId.HasValue && userMap.TryGetValue(p.CreatedByUserId.Value, out var userName))
             {

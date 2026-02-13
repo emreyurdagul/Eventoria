@@ -1,4 +1,4 @@
-﻿using Eventoria.Domain.Entities;
+using Eventoria.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -29,6 +29,15 @@ public sealed class MediaFileConfiguration : IEntityTypeConfiguration<MediaFile>
 
         builder.Property(x => x.ETag).HasMaxLength(128);
         builder.Property(x => x.Sha256).HasMaxLength(64);
+        
+        // Video Thumbnail: Self-referencing foreign key
+        // A video can optionally reference its thumbnail (another MediaFile)
+        builder.Property(x => x.ThumbnailMediaFileId);
+        builder.HasOne<MediaFile>()
+            .WithMany()
+            .HasForeignKey(x => x.ThumbnailMediaFileId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
 
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.UpdatedAtUtc);

@@ -1,8 +1,9 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
 using Eventoria.Application.Abstractions.Storage;
 using Eventoria.Domain.Entities;
 using Eventoria.Domain.Enums;
 using MediatR;
+using System.Text;
 
 namespace Eventoria.Application.Media.Upload;
 
@@ -48,7 +49,7 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
 
         ValidateLimits(cmd.ContentType, cmd.SizeBytes);
 
-        // Event context varsa: user o event’in üyesi mi? (MVP güvenlik)
+        // Event context varsa: user o event'in �yesi mi?
         if (cmd.EventId.HasValue)
         {
             var isMember = await _events.IsMemberAsync(cmd.EventId.Value, cmd.UserId, ct);
@@ -56,25 +57,40 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
                 throw new UnauthorizedAccessException("You are not a member of this event.");
         }
 
-        var providerKey = _resolver.DefaultProviderKey; // şimdilik "r2"
+        var providerKey = _resolver.DefaultProviderKey; // "r2"
         var bucket = _resolver.GetDefaultBucket(providerKey);
-
-        // object key standardı (postId henüz yok; upload önce yapılıyor)
-        // later: post oluşturunca PostMedia ile bağlayacağız.
-        var mediaId = Guid.NewGuid();
-        var objectKey = BuildObjectKey(cmd.EventId, cmd.UserId, mediaId, cmd.FileName);
-
         var storage = _resolver.Resolve(providerKey);
+
+        var isVideo = AllowedVideoTypes.Contains(cmd.ContentType);
 
         return await _uow.ExecuteInTransactionAsync(async innerCt =>
         {
-            // upload
+            // E�er video upload ediyorsak ve client thumbnail id g�nderiyorsa �nce do�rula
+            MediaFile? thumbMf = null;
+            if (isVideo && cmd.ThumbnailMediaFileId.HasValue)
+            {
+                thumbMf = await GetAndValidateThumbnailAsync(
+                    thumbnailId: cmd.ThumbnailMediaFileId.Value,
+                    userId: cmd.UserId,
+                    eventId: cmd.EventId,
+                    visibility: cmd.Visibility,
+                    ct: innerCt);
+            }
+
+            // Thumbnail zorunlu olsun istiyorsan bunu a�:
+            // if (isVideo && !cmd.ThumbnailMediaFileId.HasValue)
+            //     throw new InvalidOperationException("ThumbnailMediaFileId is required for videos.");
+
+            // 1) Upload main file (image or video)
+            var mediaId = Guid.NewGuid();
+            var objectKey = BuildObjectKey(cmd.EventId, cmd.UserId, mediaId, cmd.FileName);
+
             cmd.Content.Position = 0;
             var put = await storage.PutAsync(
                 new StoragePutRequest(bucket, objectKey, cmd.Content, cmd.ContentType),
                 innerCt);
 
-            // metadata
+            // 2) Create MediaFile entity
             var mf = new MediaFile(
                 ownerUserId: cmd.UserId,
                 eventId: cmd.EventId,
@@ -88,13 +104,11 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
 
             mf.SetETag(put.ETag);
 
-            // IMPORTANT: Id’yi biz set ediyoruz, yukarıda new Guid verdik. Bu yüzden:
-            // Domain constructor içinde Id = NewGuid() yerine Id=mediaId istemiyorsan böyle bırak.
-            // Ben burada "deterministic key" olsun diye mf.Id'yi override etmiyorum.
-            // Eğer objectKey'de mediaId kullandık, mf.Id farklı kalabilir.
-            // Bu yüzden objectKey'de mediaId yerine mf.Id kullanmak daha iyi.
-            // Basit olması için burada mf.Id ile uyumlu olacak şekilde yeniden objectKey üretelim:
-            // (Bunu istersen ilk versionda değiştirelim.)
+            // 3) If video and thumbnail provided -> link it
+            if (isVideo && thumbMf is not null)
+            {
+                mf.SetThumbnailMediaFileId(thumbMf.Id);
+            }
 
             await _mediaFiles.AddAsync(mf, innerCt);
             await _uow.SaveChangesAsync(innerCt);
@@ -118,13 +132,44 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
             throw new InvalidOperationException("Video exceeds max size (200MB).");
     }
 
+    private async Task<MediaFile> GetAndValidateThumbnailAsync(
+        Guid thumbnailId,
+        Guid userId,
+        Guid? eventId,
+        MediaVisibility visibility,
+        CancellationToken ct)
+    {
+        // Repo'nda GetByIdAsync varsa bunu kullan:
+        var thumb = await _mediaFiles.GetByIdAsync(thumbnailId, ct);
+        if (thumb is null)
+            throw new InvalidOperationException("Thumbnail not found.");
+
+        // Owner do�rulama
+        if (thumb.OwnerUserId != userId)
+            throw new UnauthorizedAccessException("Thumbnail does not belong to this user.");
+
+        // Scope (event) do�rulama: ayn� event scope'unda olmal�
+        if (thumb.EventId != eventId)
+            throw new InvalidOperationException("Thumbnail and video must belong to the same event scope.");
+
+        // Type do�rulama
+        if (!AllowedImageTypes.Contains(thumb.ContentType))
+            throw new InvalidOperationException("Thumbnail must be an image (jpeg/png/webp).");
+
+        // Visibility do�rulama (iste�e ba�l� ama �nerilir)
+        if (thumb.Visibility != visibility)
+            throw new InvalidOperationException("Thumbnail visibility must match video visibility.");
+
+        return thumb;
+    }
+
     private static string BuildObjectKey(Guid? eventId, Guid userId, Guid mediaId, string fileName)
     {
         var baseName = Path.GetFileNameWithoutExtension(fileName);
         var ext = Path.GetExtension(fileName);
 
-        var slug = Slugify(baseName);               // "kampa-fiyat-foyu"
-        var shortId = mediaId.ToString("N")[..8];   // 8 char
+        var slug = Slugify(baseName);
+        var shortId = mediaId.ToString("N")[..8];
 
         var safeName = $"{slug}-{shortId}{ext}".ToLowerInvariant();
 
@@ -135,12 +180,10 @@ public sealed class UploadMediaHandler : IRequestHandler<UploadMediaCommand, Upl
 
     private static string Slugify(string s)
     {
-        // minimal slug: boşlukları '-' yap, tehlikeli karakterleri at
-        var sb = new System.Text.StringBuilder(s.Length);
+        var sb = new StringBuilder(s.Length);
         foreach (var ch in s.Trim())
             sb.Append(char.IsLetterOrDigit(ch) ? ch : '-');
 
         return System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "-{2,}", "-").Trim('-');
     }
-
 }

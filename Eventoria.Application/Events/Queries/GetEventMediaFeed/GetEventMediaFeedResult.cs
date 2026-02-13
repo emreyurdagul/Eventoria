@@ -7,6 +7,7 @@ public sealed record EventMediaFeedItemDto(
     Guid PostAuthorId,
     string PostAuthorName,
     string MediaType,           // "Photo" or "Video"
+    Guid? ThumbnailMediaFileId, // For videos: the thumbnail's MediaFileId
     string? ThumbnailUrl,
     string? DownloadUrl,
     DateTime PostedAtUtc,

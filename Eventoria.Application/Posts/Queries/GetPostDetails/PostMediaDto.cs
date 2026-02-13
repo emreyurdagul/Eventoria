@@ -1,7 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace Eventoria.Application.Posts.Queries.GetPostDetails;
 
 public sealed record PostMediaDto(
@@ -9,5 +5,7 @@ public sealed record PostMediaDto(
     int Order,
     string Url,
     string? ContentType,
-    long SizeBytes
+    long SizeBytes,
+    string? ThumbnailUrl = null,              // For videos: thumbnail image URL
+    Guid? ThumbnailMediaFileId = null         // For videos: thumbnail MediaFileId
 );

@@ -1,4 +1,4 @@
-ï»¿using Eventoria.Domain.Common;
+using Eventoria.Domain.Common;
 using Eventoria.Domain.Enums;
 
 namespace Eventoria.Domain.Entities;
@@ -56,9 +56,12 @@ public sealed class MediaFile : BaseEntity
     public string ContentType { get; private set; } = default!;
     public long SizeBytes { get; private set; }
 
-    // opsiyonel: ETag, Sha256 vs.
+    // Metadata
     public string? ETag { get; private set; }
     public string? Sha256 { get; private set; }
+
+    // Video Thumbnail: Eðer bu bir video ise, thumbnail'ý referenceleyen MediaFile ID'si
+    public Guid? ThumbnailMediaFileId { get; private set; }
 
     public void MarkFailed()
     {
@@ -75,6 +78,15 @@ public sealed class MediaFile : BaseEntity
     public void SetETag(string? etag)
     {
         ETag = string.IsNullOrWhiteSpace(etag) ? null : etag.Trim();
+        SetUpdated();
+    }
+
+    public void SetThumbnailMediaFileId(Guid thumbnailId)
+    {
+        if (thumbnailId == Guid.Empty)
+            throw new ArgumentException("ThumbnailMediaFileId cannot be empty");
+        
+        ThumbnailMediaFileId = thumbnailId;
         SetUpdated();
     }
 }

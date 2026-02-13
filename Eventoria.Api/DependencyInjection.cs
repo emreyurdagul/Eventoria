@@ -7,6 +7,7 @@ using Eventoria.Infrastructure.Security;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -46,10 +47,20 @@ public static class DependencyInjection
             });
         });
 
+        services.Configure<FormOptions>(o =>
+        {
+            // 200MB+ için (sen 210_000_000 demişsin)
+            o.MultipartBodyLengthLimit = 210_000_000;
+            // İstersen güvenli bir tık daha yüksek:
+            // o.MultipartBodyLengthLimit = 300_000_000;
+        });
+
+
         // JWT
         var key = config["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
         var issuer = config["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
         var audience = config["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
+
 
         services.Configure<CookieAuthenticationOptions>(IdentityConstants.ExternalScheme, opt =>
         {

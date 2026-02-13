@@ -43,7 +43,7 @@ public sealed class PostRepository : GenericRepository<Post>, IPostRepository
 
     public async Task<GetEventMediaFeedResult> GetEventMediaFeedAsync(Guid eventId, int page, int pageSize, CancellationToken ct)
     {
-        // Get paginated media items
+        // Get paginated media items with thumbnail info
         var mediaItems = await _db.PostMedias
             .AsNoTracking()
             .Join(
@@ -74,6 +74,7 @@ public sealed class PostRepository : GenericRepository<Post>, IPostRepository
                 PostAuthorId: item.p.CreatedByUserId.Value,
                 PostAuthorName: item.u.DisplayName ?? item.u.Email ?? "Unknown",
                 MediaType: item.mf.ContentType.StartsWith("image/") ? "Photo" : "Video",
+                ThumbnailMediaFileId: item.mf.ThumbnailMediaFileId, // Include thumbnail ID for videos
                 ThumbnailUrl: null,
                 DownloadUrl: null,
                 PostedAtUtc: item.p.CreatedAtUtc,

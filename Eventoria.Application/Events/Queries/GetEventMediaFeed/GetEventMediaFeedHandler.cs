@@ -47,19 +47,22 @@ public sealed class GetEventMediaFeedHandler : IRequestHandler<GetEventMediaFeed
                 throw new UnauthorizedAccessException("User is not a member of this event.");
         }
 
-        // Get paginated media feed with basic data
+        // Get paginated media feed with basic data and thumbnail IDs
         var mediaFeedResult = await _posts.GetEventMediaFeedAsync(query.EventId, query.Page, query.PageSize, ct);
 
-        // Extract media file IDs
-        var mediaFileIds = mediaFeedResult.MediaItems
-            .Select(item => item.MediaId)
-            .Distinct()
-            .ToList();
+        // Collect all media file IDs (main files + thumbnails)
+        var allMediaFileIds = new HashSet<Guid>();
+        foreach (var item in mediaFeedResult.MediaItems)
+        {
+            allMediaFileIds.Add(item.MediaId);
+            if (item.ThumbnailMediaFileId.HasValue)
+                allMediaFileIds.Add(item.ThumbnailMediaFileId.Value);
+        }
 
-        // Get actual media files from database
-        var mediaFiles = mediaFileIds.Count == 0
+        // Get all media files from database
+        var mediaFiles = allMediaFileIds.Count == 0
             ? new List<Eventoria.Domain.Entities.MediaFile>()
-            : await _mediaFiles.GetByIdsAsync(mediaFileIds, ct);
+            : await _mediaFiles.GetByIdsAsync(allMediaFileIds.ToList(), ct);
 
         var mediaFileMap = mediaFiles.ToDictionary(x => x.Id);
 
@@ -70,32 +73,54 @@ public sealed class GetEventMediaFeedHandler : IRequestHandler<GetEventMediaFeed
 
         foreach (var item in mediaFeedResult.MediaItems)
         {
+            string? downloadUrl = null;
+            string? thumbnailUrl = null;
+
+            // Get download URL for the main media file
             if (mediaFileMap.TryGetValue(item.MediaId, out var mf))
             {
                 var storage = _resolver.Resolve(mf.ProviderKey);
 
-                var downloadUrl = await storage.GetDownloadUrlAsync(
+                downloadUrl = await storage.GetDownloadUrlAsync(
                     mf.BucketOrContainer,
                     mf.ObjectKey,
                     validFor: ttl,
                     ct);
-
-                var itemWithUrl = new EventMediaFeedItemDto(
-                    MediaId: item.MediaId,
-                    PostId: item.PostId,
-                    PostTitle: item.PostTitle,
-                    PostAuthorId: item.PostAuthorId,
-                    PostAuthorName: item.PostAuthorName,
-                    MediaType: item.MediaType,
-                    ThumbnailUrl: downloadUrl,
-                    DownloadUrl: downloadUrl,
-                    PostedAtUtc: item.PostedAtUtc,
-                    LikeCount: item.LikeCount,
-                    CommentCount: item.CommentCount
-                );
-
-                itemsWithUrls.Add(itemWithUrl);
             }
+
+            // For videos: get thumbnail URL
+            if (item.ThumbnailMediaFileId.HasValue 
+                && mediaFileMap.TryGetValue(item.ThumbnailMediaFileId.Value, out var thumbnailMf))
+            {
+                var thumbnailStorage = _resolver.Resolve(thumbnailMf.ProviderKey);
+
+                thumbnailUrl = await thumbnailStorage.GetDownloadUrlAsync(
+                    thumbnailMf.BucketOrContainer,
+                    thumbnailMf.ObjectKey,
+                    validFor: ttl,
+                    ct);
+            }
+
+            // If video without thumbnail, use the video URL as download (fallback)
+            if (item.MediaType == "Video" && thumbnailUrl == null)
+                thumbnailUrl = downloadUrl;
+
+            var itemWithUrl = new EventMediaFeedItemDto(
+                MediaId: item.MediaId,
+                PostId: item.PostId,
+                PostTitle: item.PostTitle,
+                PostAuthorId: item.PostAuthorId,
+                PostAuthorName: item.PostAuthorName,
+                MediaType: item.MediaType,
+                ThumbnailMediaFileId: item.ThumbnailMediaFileId,
+                ThumbnailUrl: thumbnailUrl ?? downloadUrl,  // Thumbnail for display
+                DownloadUrl: downloadUrl,                   // Original media for download
+                PostedAtUtc: item.PostedAtUtc,
+                LikeCount: item.LikeCount,
+                CommentCount: item.CommentCount
+            );
+
+            itemsWithUrls.Add(itemWithUrl);
         }
 
         return new GetEventMediaFeedResult(

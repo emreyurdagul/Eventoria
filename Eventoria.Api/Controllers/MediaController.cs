@@ -40,6 +40,7 @@ public sealed class MediaController : ControllerBase
         var cmd = new UploadMediaCommand(
             UserId: userId,
             EventId: form.EventId,
+            ThumbnailMediaFileId: form.ThumbnailMediaFileId,
             Visibility: form.Visibility,
             FileName: form.File.FileName,
             ContentType: form.File.ContentType,
