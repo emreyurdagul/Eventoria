@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Eventoria.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260213174732_AddThumbnailMediaFileIdToMediaFile")]
+    [Migration("20260213192921_AddThumbnailMediaFileIdToMediaFile")]
     partial class AddThumbnailMediaFileIdToMediaFile
     {
         /// <inheritdoc />
@@ -260,6 +260,8 @@ namespace Eventoria.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ThumbnailMediaFileId");
 
                     b.HasIndex("EventId", "CreatedAtUtc");
 
@@ -644,6 +646,14 @@ namespace Eventoria.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("Eventoria.Domain.Entities.MediaFile", b =>
+                {
+                    b.HasOne("Eventoria.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("ThumbnailMediaFileId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Eventoria.Domain.Entities.PostMedia", b =>
