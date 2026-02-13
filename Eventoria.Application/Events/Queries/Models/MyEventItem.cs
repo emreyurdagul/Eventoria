@@ -11,5 +11,5 @@ public sealed record MyEventItem(
     EventRole MyRole,
     int ParticipantLimit,
     int MemberCount,
-    Guid? CoverPhotoMediaFileId
+    EventCoverDto? CoverPhoto
 );

@@ -1,4 +1,5 @@
-﻿using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Persistence;
+using Eventoria.Application.Abstractions.Storage;
 using Eventoria.Application.Admin.Events.Models;
 using Eventoria.Application.Common.Models;
 using Eventoria.Application.Events.Queries.Models;
@@ -12,10 +13,12 @@ namespace Eventoria.Infrastructure.Persistence;
 public class EventRepository : GenericRepository<Event>, IEventRepository
 {
     private readonly AppDbContext _db;
+    private readonly IStorageProviderResolver _storageResolver;
 
-    public EventRepository(AppDbContext db) : base(db)
+    public EventRepository(AppDbContext db, IStorageProviderResolver storageResolver) : base(db)
     {
         _db = db;
+        _storageResolver = storageResolver;
     }
 
     public Task<Event?> GetByIdWithIncludesAsync(Guid eventId, CancellationToken ct)
@@ -69,32 +72,77 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     public Task<bool> IsMemberAsync(Guid eventId, Guid userId, CancellationToken ct)
         => _db.EventMemberships.AnyAsync(m => m.EventId == eventId && m.UserId == userId, ct);
 
+    private async Task<EventCoverDto?> GetCoverPhotoDtoAsync(Guid? mediaFileId, CancellationToken ct)
+    {
+        if (!mediaFileId.HasValue)
+            return null;
+
+        var mediaFile = await _db.Set<MediaFile>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == mediaFileId.Value, ct);
+
+        if (mediaFile == null)
+            return null;
+
+        try
+        {
+            var storage = _storageResolver.Resolve(mediaFile.ProviderKey);
+            var url = await storage.GetDownloadUrlAsync(
+                mediaFile.BucketOrContainer,
+                mediaFile.ObjectKey,
+                validFor: TimeSpan.FromMinutes(15),
+                ct);
+
+            return new EventCoverDto(
+                MediaFileId: mediaFile.Id,
+                Url: url,
+                ContentType: mediaFile.ContentType
+            );
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<IReadOnlyList<MyEventItem>> GetMyEventsAsync(Guid userId, CancellationToken ct)
     {
-        var list = await _db.EventMemberships
+        var eventIds = await _db.EventMemberships
             .AsNoTracking()
             .Where(m => m.UserId == userId)
-            .Join(
-                _db.Events.AsNoTracking(),
-                m => m.EventId,
-                e => e.Id,
-                (m, e) => new { m, e }
-            )
-            .Select(x => new MyEventItem(
-                EventId: x.e.Id,
-                Code: x.e.Code,
-                Title: x.e.Title,
-                Date: x.e.Date,
-                Status: x.e.Status,
-                MyRole: x.m.Role,
-                ParticipantLimit: x.e.Specs.ParticipantLimit,
-                MemberCount: _db.EventMemberships.Count(mm => mm.EventId == x.e.Id),
-                CoverPhotoMediaFileId: x.e.CoverPhotoMediaFileId   // ✅ BURASI Event’ten
-            ))
-            .OrderByDescending(x => x.Date)
+            .Select(m => m.EventId)
             .ToListAsync(ct);
 
-        return list;
+        var events = await _db.Events
+            .AsNoTracking()
+            .Where(e => eventIds.Contains(e.Id))
+            .ToListAsync(ct);
+
+        var memberships = await _db.EventMemberships
+            .AsNoTracking()
+            .Where(m => m.UserId == userId && eventIds.Contains(m.EventId))
+            .ToListAsync(ct);
+
+        var items = new List<MyEventItem>();
+        foreach (var evt in events)
+        {
+            var membership = memberships.FirstOrDefault(m => m.EventId == evt.Id);
+            var coverDto = await GetCoverPhotoDtoAsync(evt.CoverPhotoMediaFileId, ct);
+
+            items.Add(new MyEventItem(
+                EventId: evt.Id,
+                Code: evt.Code,
+                Title: evt.Title,
+                Date: evt.Date,
+                Status: evt.Status,
+                MyRole: membership?.Role ?? EventRole.Participant,
+                ParticipantLimit: evt.Specs.ParticipantLimit,
+                MemberCount: await _db.EventMemberships.CountAsync(mm => mm.EventId == evt.Id, ct),
+                CoverPhoto: coverDto
+            ));
+        }
+
+        return items.OrderByDescending(x => x.Date).ToList();
     }
 
     public async Task<IReadOnlyList<MyEventItem>> GetMyEventsPagedAsync(
@@ -105,26 +153,46 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     {
         var skip = (page - 1) * pageSize;
 
-        var list = await _db.EventMemberships
+        var eventIds = await _db.EventMemberships
             .AsNoTracking()
             .Where(m => m.UserId == userId)
             .OrderByDescending(m => m.Event.CreatedAtUtc)
             .Skip(skip)
             .Take(pageSize)
-            .Select(m => new MyEventItem(
-                EventId: m.Event.Id,
-                Code: m.Event.Code,
-                Title: m.Event.Title,
-                Date: m.Event.Date,
-                Status: m.Event.Status,
-                MyRole: m.Role,
-                ParticipantLimit: m.Event.Specs.ParticipantLimit,
-                MemberCount: _db.EventMemberships.Count(x => x.EventId == m.EventId),
-                CoverPhotoMediaFileId: m.Event.CoverPhotoMediaFileId
-            ))
+            .Select(m => m.EventId)
             .ToListAsync(ct);
 
-        return list;
+        var events = await _db.Events
+            .AsNoTracking()
+            .Where(e => eventIds.Contains(e.Id))
+            .ToListAsync(ct);
+
+        var memberships = await _db.EventMemberships
+            .AsNoTracking()
+            .Where(m => m.UserId == userId && eventIds.Contains(m.EventId))
+            .ToListAsync(ct);
+
+        var items = new List<MyEventItem>();
+        foreach (var evt in events)
+        {
+            var membership = memberships.FirstOrDefault(m => m.EventId == evt.Id);
+            var memberCount = await _db.EventMemberships.CountAsync(x => x.EventId == evt.Id, ct);
+            var coverDto = await GetCoverPhotoDtoAsync(evt.CoverPhotoMediaFileId, ct);
+
+            items.Add(new MyEventItem(
+                EventId: evt.Id,
+                Code: evt.Code,
+                Title: evt.Title,
+                Date: evt.Date,
+                Status: evt.Status,
+                MyRole: membership?.Role ?? EventRole.Participant,
+                ParticipantLimit: evt.Specs.ParticipantLimit,
+                MemberCount: memberCount,
+                CoverPhoto: coverDto
+            ));
+        }
+
+        return items.OrderByDescending(x => x.Date).ToList();
     }
 
     public async Task<IReadOnlyList<MyEventItem>> GetAllEventsPagedAsync(
@@ -134,27 +202,34 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
     {
         var skip = (page - 1) * pageSize;
 
-        var list = await _db.Events
+        var events = await _db.Events
             .AsNoTracking()
             .OrderByDescending(e => e.CreatedAtUtc)
             .Skip(skip)
             .Take(pageSize)
-            .Select(e => new MyEventItem(
-                EventId: e.Id,
-                Code: e.Code,
-                Title: e.Title,
-                Date: e.Date,
-                Status: e.Status,
-                MyRole: EventRole.Admin,
-                ParticipantLimit: e.Specs.ParticipantLimit,
-                MemberCount: _db.EventMemberships.Count(x => x.EventId == e.Id),
-                CoverPhotoMediaFileId: e.CoverPhotoMediaFileId
-            ))
             .ToListAsync(ct);
 
-        return list;
-    }
+        var items = new List<MyEventItem>();
+        foreach (var evt in events)
+        {
+            var memberCount = await _db.EventMemberships.CountAsync(x => x.EventId == evt.Id, ct);
+            var coverDto = await GetCoverPhotoDtoAsync(evt.CoverPhotoMediaFileId, ct);
 
+            items.Add(new MyEventItem(
+                EventId: evt.Id,
+                Code: evt.Code,
+                Title: evt.Title,
+                Date: evt.Date,
+                Status: evt.Status,
+                MyRole: EventRole.Admin,
+                ParticipantLimit: evt.Specs.ParticipantLimit,
+                MemberCount: memberCount,
+                CoverPhoto: coverDto
+            ));
+        }
+
+        return items;
+    }
 
     public Task<int> CountMyEventsAsync(Guid userId, CancellationToken ct)
         => _db.EventMemberships.CountAsync(m => m.UserId == userId, ct);
@@ -175,11 +250,11 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
 
         var role = roleRow.Role;
 
-        // Not: ctor'da "cover" isimli parametre yok => named arg KULLANMIYORUZ
-        return await _db.Events
+        var eventData = await _db.Events
             .AsNoTracking()
             .Where(e => e.Id == eventId)
-            .Select(e => new EventDetailsDto(
+            .Select(e => new
+            {
                 e.Id,
                 e.Code,
                 e.Title,
@@ -187,26 +262,47 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 e.Date,
                 e.Status,
                 e.CreatedByUserId,
-                /* EventCoverDto? */ null, // ✅ cover parametresi, ismi ne olursa olsun sırayla
-                role,
+                e.CoverPhotoMediaFileId,
                 e.Specs.ParticipantLimit,
                 e.Specs.PhotosPerUserLimit,
                 e.Specs.VideosPerUserLimit,
-                _db.EventMemberships.Count(m => m.EventId == e.Id),
-                role == EventRole.Admin
+                MemberCount = _db.EventMemberships.Count(m => m.EventId == e.Id),
+                HasActiveInvite = role == EventRole.Admin
                     ? _db.Set<EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
                     : false
-            ))
+            })
             .FirstOrDefaultAsync(ct);
+
+        if (eventData == null)
+            return null;
+
+        var coverDto = await GetCoverPhotoDtoAsync(eventData.CoverPhotoMediaFileId, ct);
+
+        return new EventDetailsDto(
+            eventData.Id,
+            eventData.Code,
+            eventData.Title,
+            eventData.Description,
+            eventData.Date,
+            eventData.Status,
+            eventData.CreatedByUserId,
+            coverDto,
+            role,
+            eventData.ParticipantLimit,
+            eventData.PhotosPerUserLimit,
+            eventData.VideosPerUserLimit,
+            eventData.MemberCount,
+            eventData.HasActiveInvite
+        );
     }
 
-    public Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct)
+    public async Task<EventDetailsDto?> GetEventDetailsByIdAsync(Guid eventId, CancellationToken ct)
     {
-        // Not: ctor'da "cover" isimli parametre yok => named arg KULLANMIYORUZ
-        return _db.Events
+        var eventData = await _db.Events
             .AsNoTracking()
             .Where(e => e.Id == eventId)
-            .Select(e => new EventDetailsDto(
+            .Select(e => new
+            {
                 e.Id,
                 e.Code,
                 e.Title,
@@ -214,15 +310,36 @@ public class EventRepository : GenericRepository<Event>, IEventRepository
                 e.Date,
                 e.Status,
                 e.CreatedByUserId,
-                /* EventCoverDto? */ null, // ✅ cover parametresi
-                EventRole.Admin,
+                e.CoverPhotoMediaFileId,
                 e.Specs.ParticipantLimit,
                 e.Specs.PhotosPerUserLimit,
                 e.Specs.VideosPerUserLimit,
-                _db.EventMemberships.Count(m => m.EventId == e.Id),
-                _db.Set<EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
-            ))
+                MemberCount = _db.EventMemberships.Count(m => m.EventId == e.Id),
+                HasActiveInvite = _db.Set<EventInvite>().Any(i => i.EventId == e.Id && i.IsActive)
+            })
             .FirstOrDefaultAsync(ct);
+
+        if (eventData == null)
+            return null;
+
+        var coverDto = await GetCoverPhotoDtoAsync(eventData.CoverPhotoMediaFileId, ct);
+
+        return new EventDetailsDto(
+            eventData.Id,
+            eventData.Code,
+            eventData.Title,
+            eventData.Description,
+            eventData.Date,
+            eventData.Status,
+            eventData.CreatedByUserId,
+            coverDto,
+            EventRole.Admin,
+            eventData.ParticipantLimit,
+            eventData.PhotosPerUserLimit,
+            eventData.VideosPerUserLimit,
+            eventData.MemberCount,
+            eventData.HasActiveInvite
+        );
     }
 
     public async Task<PagedResult<EventMemberDto>> GetEventMembersAsync(
