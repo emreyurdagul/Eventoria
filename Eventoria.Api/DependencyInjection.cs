@@ -20,8 +20,6 @@ public static class DependencyInjection
         services.AddControllers();
         services.AddEndpointsApiExplorer();
 
-
-
         services.AddSwaggerGen(o =>
         {
             o.SwaggerDoc("v1", new OpenApiInfo
@@ -41,12 +39,12 @@ public static class DependencyInjection
                 Description = "JWT Token giriniz: Bearer {token}"
             });
 
-            // v10: requirement document üzerinden reference ile veriliyor
             o.AddSecurityRequirement(document => new OpenApiSecurityRequirement
             {
                 [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
             });
         });
+
         // JWT
         var key = config["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
         var issuer = config["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
@@ -54,23 +52,8 @@ public static class DependencyInjection
 
         services.AddAuthentication(options =>
         {
-            options.DefaultScheme = "Smart";
-            options.DefaultChallengeScheme = "Smart";
-        })
-        .AddPolicyScheme("Smart", "Smart", options =>
-        {
-            options.ForwardDefaultSelector = context =>
-            {
-                var auth = context.Request.Headers.Authorization.ToString();
-                if (!string.IsNullOrEmpty(auth) &&
-                    auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    return JwtBearerDefaults.AuthenticationScheme;
-                }
-
-                // Identity cookie (UI / external flow fallback)
-                return IdentityConstants.ApplicationScheme; // "Identity.Application"
-            };
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         })
         .AddJwtBearer(opt =>
         {
@@ -86,7 +69,8 @@ public static class DependencyInjection
                 ClockSkew = TimeSpan.FromMinutes(2)
             };
         })
-        .AddCookie("External", opt =>
+        // ✅ External cookie scheme ismi IdentityConstants.ExternalScheme ile aynı olmalı
+        .AddCookie(IdentityConstants.ExternalScheme, opt =>
         {
             opt.Cookie.Name = "eventoria.external";
             opt.ExpireTimeSpan = TimeSpan.FromMinutes(5);
@@ -96,10 +80,15 @@ public static class DependencyInjection
         })
         .AddGoogle("Google", opt =>
         {
-            opt.ClientId = config["Authentication:Google:ClientId"]!;
-            opt.ClientSecret = config["Authentication:Google:ClientSecret"]!;
+            opt.ClientId = config["Authentication:Google:ClientId"]
+                ?? throw new InvalidOperationException("Google ClientId missing");
+            opt.ClientSecret = config["Authentication:Google:ClientSecret"]
+                ?? throw new InvalidOperationException("Google ClientSecret missing");
 
+            // ✅ Google login sonucu external cookie'ye yazılacak
             opt.SignInScheme = IdentityConstants.ExternalScheme;
+
+            // ✅ Google'ın döneceği middleware endpoint
             opt.CallbackPath = "/signin-google";
 
             opt.Scope.Add("email");
@@ -107,16 +96,13 @@ public static class DependencyInjection
 
             opt.CorrelationCookie.SameSite = SameSiteMode.None;
             opt.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
-
         });
-        // MediatR
+
         services.AddMediatR(cfg =>
         {
-            cfg.RegisterServicesFromAssembly(
-                typeof(CreateEventHandler).Assembly);
+            cfg.RegisterServicesFromAssembly(typeof(CreateEventHandler).Assembly);
         });
 
-        // Temporary registrations (idealde Infrastructure'da olur)
         services.AddScoped<IEventAdminQuotaRepository, EventAdminQuotaRepository>();
         services.AddSingleton<IEventTokenService, EventTokenService>();
         services.AddScoped<ExceptionHandlingMiddleware>();
